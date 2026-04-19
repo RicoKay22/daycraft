@@ -48,19 +48,29 @@ export function AuthProvider({ children }) {
     if (data?.user) {
       setUser(data.user)
       fetchProfile(data.user.id)
-    }
+    }signUp
     return data
   }
 
   async function signUp(email, password, username) {
-    const { data, error } = await supabase.auth.signUp({
-      email, password,
-      options: { data: { username, full_name: username } },
-    })
-    if (error) throw error
-    if (data?.user) await ensureProfile(data.user.id, { username, email })
-    return data
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: { username, full_name: username },
+      // After confirmation click, land back on AuthPage with a flag
+      emailRedirectTo: `${window.location.origin}/auth?confirmed=true`,
+    },
+  })
+  if (error) throw error
+
+  // Only create profile for a genuinely new user (identities will be populated)
+  if (data?.user && data.user.identities?.length > 0) {
+    await ensureProfile(data.user.id, { username, email })
   }
+
+  return data
+}
 
   async function signOut() {
     setUser(null)
