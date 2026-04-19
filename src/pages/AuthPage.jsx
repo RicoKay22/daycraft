@@ -195,14 +195,15 @@ useEffect(() => {
         return
       }
 
-      if (data?.user && !data.session) {
-        // Email confirmation required — expected happy path
-        setSuccess('Account created! Check your email to confirm your account before signing in.')
-        switchTab('login')
-        setEmail('')
-        setPassword('')
-        setUsername('')
-      } else if (data?.session) {
+     if (data?.user && !data.session) {
+  setTab('login')
+  setError('')
+  setSuccess('Account created! Check your email to confirm your account before signing in.')
+  setPassword('')
+  setUsername('')
+}
+     
+      else if (data?.session) {
         // Email confirmation disabled (shouldn't happen after dashboard fix, but handle it)
         navigate(from, { replace: true })
       }
@@ -259,7 +260,7 @@ useEffect(() => {
     if (error) throw error
     // NOTE: Supabase always returns success here even if email doesn't exist
     // This is intentional — prevents email enumeration attacks
-    setSuccess('If an account exists for this email, a reset link has been sent. Check your inbox.')
+    setSuccess('If an account exists for this email, a reset link has been sent. Check your inbox/spam folder.')
   } catch (err) {
     const msg = err.message || ''
     if (msg.includes('rate limit') || msg.includes('after')) {
