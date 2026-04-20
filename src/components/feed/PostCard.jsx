@@ -249,9 +249,9 @@ export default function PostCard({ post, onComment }) {
           onToggle={() => toggleLike(post.id, post.is_liked_by_me)}
         />
 
-        {/* Comment */}
+        {/* Comment — navigates to post detail until CommentSheet (Phase 6) */}
         <button
-          onClick={(e) => { e.stopPropagation(); onComment?.(post) }}
+          onClick={(e) => { e.stopPropagation(); if (onComment) { onComment(post) } else { navigate(`/post/${post.id}`) } }}
           style={{
             display: 'flex', alignItems: 'center', gap: 5,
             background: 'none', border: 'none', cursor: 'pointer',
@@ -296,7 +296,7 @@ export default function PostCard({ post, onComment }) {
               e.currentTarget.style.color = 'var(--text-muted)'
             }
           }}
-          title={copyDone ? 'Link copied!' : 'Copy link'}
+          title="Copy post link"
         >
           <Share2 size={15} strokeWidth={1.8} />
           {copyDone && (

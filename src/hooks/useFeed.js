@@ -2,64 +2,62 @@ import { useEffect, useCallback, useRef } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useAuth } from '../context/AuthContext'
 import {
-  fetchFeedPosts, selectPostsStatus, postsActions
+  fetchFeedPosts, selectPostsStatus, selectPostsHasMore, postsActions
 } from '../store/postsSlice'
 import { fetchFollowingIds, selectFollowingIds } from '../store/usersSlice'
 import {
   selectFeedPosts, feedActions,
-  selectFeedPage, selectFeedHasMore, selectFeedLoading
+  selectFeedPage, selectFeedLoading
 } from '../store/feedSlice'
 import { supabase } from '../lib/supabase'
 
 /**
- * useFeed — REQUIRED by assignment
- * Fixed: followingIds reference equality, loadMore guard, initialization race
+ * useFeed — required by assignment
+ *
+ * KEY FIX: hasMore must come from postsSlice (updated on every fetch result)
+ * NOT feedSlice (which was never updated, causing infinite loadMore loop)
  */
 export function useFeed() {
-  const dispatch    = useDispatch()
+  const dispatch   = useDispatch()
   const { user }   = useAuth()
 
   const followingIds = useSelector(selectFollowingIds)
   const status       = useSelector(selectPostsStatus)
   const page         = useSelector(selectFeedPage)
-  const hasMore      = useSelector(selectFeedHasMore)
   const feedLoading  = useSelector(selectFeedLoading)
 
+  // ← CRITICAL: use posts slice hasMore — it is set to false when result < 12
+  // feedSlice.hasMore was never being updated, causing infinite loop
+  const hasMore = useSelector(selectPostsHasMore)
+
   // Derived selector — posts filtered by followed users + own posts
-  const feedPosts = useSelector(state =>
-    selectFeedPosts(state, user?.id)
-  )
+  const feedPosts = useSelector(state => selectFeedPosts(state, user?.id))
 
-  // Track if initial load has started — prevents loadMore firing before first fetch
+  // Stable refs — survive re-renders without causing effect re-runs
   const initializedRef = useRef(false)
-  // Stable key for followingIds — prevents new array reference causing re-runs
-  const followingKey = followingIds.join(',')
+  const followingKey   = followingIds.join(',')
 
-  // ── STEP 1: Fetch who the user follows + hydrate liked post IDs ──────────
+  // ── Step 1: Fetch followingIds + hydrate liked post IDs ──────────────────
   useEffect(() => {
     if (!user?.id) return
 
-    const init = async () => {
-      await dispatch(fetchFollowingIds(user.id))
+    dispatch(fetchFollowingIds(user.id))
 
-      const { data: likes } = await supabase
-        .from('likes')
-        .select('post_id')
-        .eq('user_id', user.id)
+    supabase
+      .from('likes')
+      .select('post_id')
+      .eq('user_id', user.id)
+      .then(({ data: likes }) => {
+        if (likes?.length) {
+          dispatch(postsActions.setLikedPostIds(likes.map(l => l.post_id)))
+        }
+      })
+  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-      if (likes?.length) {
-        dispatch(postsActions.setLikedPostIds(likes.map(l => l.post_id)))
-      }
-    }
-
-    init()
-  }, [user?.id]) // eslint-disable-line
-
-  // ── STEP 2: Fetch posts once followingIds are known ──────────────────────
-  // Uses followingKey (string) not followingIds (array) to prevent reference churn
+  // ── Step 2: Initial feed fetch — runs ONCE only ───────────────────────────
   useEffect(() => {
     if (!user?.id) return
-    if (initializedRef.current) return  // only run once
+    if (initializedRef.current) return     // guard: never run twice
 
     initializedRef.current = true
     dispatch(feedActions.setFeedLoading(true))
@@ -73,16 +71,15 @@ export function useFeed() {
       dispatch(feedActions.setFeedLoading(false))
       dispatch(feedActions.setFeedPage(0))
     })
-  }, [followingKey, user?.id]) // eslint-disable-line
+  }, [followingKey, user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── STEP 3: Load more (infinite scroll) ──────────────────────────────────
+  // ── Step 3: Load more — triggered by IntersectionObserver ─────────────────
   const loadMore = useCallback(() => {
-    // Guard: don't fire if initial load hasn't settled
-    if (!user?.id) return
-    if (!initializedRef.current) return
-    if (feedLoading) return
-    if (!hasMore) return
-    if (status === 'loading') return
+    if (!user?.id)                return
+    if (!initializedRef.current)  return   // initial load not done yet
+    if (feedLoading)              return   // already loading
+    if (!hasMore)                 return   // no more pages — STOPS the infinite loop
+    if (status === 'loading')     return   // posts are loading
 
     const nextPage = page + 1
     dispatch(feedActions.setFeedPage(nextPage))
@@ -96,14 +93,17 @@ export function useFeed() {
     })).finally(() => {
       dispatch(feedActions.setFeedLoading(false))
     })
-  }, [user?.id, feedLoading, hasMore, status, page, followingKey]) // eslint-disable-line
+  }, [user?.id, feedLoading, hasMore, status, page, followingKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loading = status === 'loading' || feedLoading
+  const isEmpty = !loading && initializedRef.current && feedPosts.length === 0
 
   return {
     feedPosts,
-    loading:  status === 'loading' || feedLoading,
-    error:    status === 'failed',
+    loading,
+    error:  status === 'failed',
     hasMore,
     loadMore,
-    isEmpty:  initializedRef.current && status !== 'loading' && !feedLoading && feedPosts.length === 0,
+    isEmpty,
   }
 }

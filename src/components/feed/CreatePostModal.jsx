@@ -31,17 +31,20 @@ export default function CreatePostModal({ isOpen, onClose }) {
   const charsLeft = MAX_CHARS - content.length
   const canPost   = content.trim().length > 0 && !uploading
 
-  // Use profile data with fallbacks — profile may not be loaded yet
   const displayUsername = profile?.username || user?.email?.split('@')[0] || 'you'
   const displayName     = profile?.full_name || displayUsername
   const displayAvatar   = profile?.avatar_url || null
   const displayInitials = displayUsername.slice(0, 2).toUpperCase()
 
-  function handleClose() {
-    if (uploading) return  // don't close while posting
+  function resetAndClose() {
     setContent(''); setImageFile(null); setImagePreview(null)
     setError(''); setPostType('dev'); setUploading(false)
     onClose()
+  }
+
+  function handleClose() {
+    if (uploading) return
+    resetAndClose()
   }
 
   function handleImage(e) {
@@ -53,15 +56,13 @@ export default function CreatePostModal({ isOpen, onClose }) {
     setError('')
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault()
+  async function handleSubmit() {
     if (!canPost || !user) return
     setUploading(true); setError('')
 
     try {
       let imageUrl = null
 
-      // Upload image if attached
       if (imageFile) {
         const ext  = imageFile.name.split('.').pop().toLowerCase()
         const path = `${user.id}/${Date.now()}.${ext}`
@@ -77,7 +78,6 @@ export default function CreatePostModal({ isOpen, onClose }) {
         imageUrl = urlData.publicUrl
       }
 
-      // Prefix content with type tag
       const typePrefix   = `[${postType.toUpperCase()}] `
       const finalContent = content.startsWith('[') ? content : typePrefix + content
 
@@ -93,14 +93,13 @@ export default function CreatePostModal({ isOpen, onClose }) {
         },
       }))
 
-      // Check if the dispatch was rejected
       if (createPost.rejected.match(result)) {
-        throw new Error(result.payload || 'Failed to create post')
+        throw new Error(result.payload || 'Failed to create post. Please try again.')
       }
 
-      handleClose()
+      resetAndClose()
     } catch (err) {
-      console.error('Post creation error:', err)
+      console.error('Post error:', err)
       setError(err.message || 'Failed to create post. Please try again.')
       setUploading(false)
     }
@@ -126,31 +125,40 @@ export default function CreatePostModal({ isOpen, onClose }) {
             }}
           />
 
-          {/* Modal — fixed position, scrollable internally */}
+          {/* Modal — anchored to top with capped max-height */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.96, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: 10 }}
-            transition={{ type: 'spring', stiffness: 280, damping: 28 }}
+            initial={{ opacity: 0, y: 24, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12, scale: 0.97 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             style={{
               position: 'fixed',
-              top: '50%', left: '50%',
+              // Top-anchored: never goes off the top, grows downward
+              // max-height caps it so it never goes off the bottom
+              top: '50%',
+              left: '50%',
               transform: 'translate(-50%, -50%)',
               width: 'calc(100% - 32px)',
               maxWidth: 520,
-              maxHeight: 'calc(100dvh - 48px)',
+              // min() ensures modal never exceeds viewport height
+              maxHeight: 'min(580px, calc(100dvh - 32px))',
               background: 'var(--surface)',
               border: '1px solid var(--border)',
               borderRadius: 16,
               zIndex: 201,
+              // Flex column so footer stays pinned at bottom
               display: 'flex',
               flexDirection: 'column',
-              overflow: 'hidden',  // clip the rounded corners
+              overflow: 'hidden',
             }}
           >
-            {/* Scrollable inner area */}
-            <div style={{ overflowY: 'auto', padding: '20px 20px 0', flex: 1 }}>
-
+            {/* Scrollable content area — takes remaining space */}
+            <div style={{
+              flex: '1 1 auto',
+              overflowY: 'auto',
+              padding: '20px 20px 0',
+              minHeight: 0,  // required for flex overflow to work
+            }}>
               {/* Header */}
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
                 <h3 style={{
@@ -163,9 +171,11 @@ export default function CreatePostModal({ isOpen, onClose }) {
                   onClick={handleClose}
                   disabled={uploading}
                   style={{
-                    background: 'none', border: 'none', cursor: uploading ? 'not-allowed' : 'pointer',
+                    background: 'none', border: 'none',
+                    cursor: uploading ? 'not-allowed' : 'pointer',
                     color: 'var(--text-muted)', padding: 6, borderRadius: 7,
                     display: 'flex', opacity: uploading ? 0.4 : 1,
+                    transition: 'background 150ms',
                   }}
                   onMouseEnter={e => { if (!uploading) e.currentTarget.style.background = 'var(--surface-raised)' }}
                   onMouseLeave={e => e.currentTarget.style.background = 'none'}
@@ -174,7 +184,7 @@ export default function CreatePostModal({ isOpen, onClose }) {
                 </button>
               </div>
 
-              {/* Post type selector */}
+              {/* Type selector */}
               <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
                 {TYPE_OPTIONS.map(type => {
                   const Icon   = type.icon
@@ -201,7 +211,7 @@ export default function CreatePostModal({ isOpen, onClose }) {
                 })}
               </div>
 
-              {/* User info row */}
+              {/* User chip */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                 <div style={{
                   width: 32, height: 32, borderRadius: 9,
@@ -212,9 +222,7 @@ export default function CreatePostModal({ isOpen, onClose }) {
                 }}>
                   {displayAvatar
                     ? <img src={displayAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : <span style={{ fontFamily: 'var(--font-heading)', fontSize: 11, fontWeight: 700, color: '#0B0B0E' }}>
-                        {displayInitials}
-                      </span>
+                    : <span style={{ fontFamily: 'var(--font-heading)', fontSize: 11, fontWeight: 700, color: '#0B0B0E' }}>{displayInitials}</span>
                   }
                 </div>
                 <span style={{ fontFamily: 'var(--font-heading)', fontSize: 13, color: 'var(--text-secondary)' }}>
@@ -226,7 +234,7 @@ export default function CreatePostModal({ isOpen, onClose }) {
               <textarea
                 value={content}
                 onChange={e => setContent(e.target.value.slice(0, MAX_CHARS))}
-                placeholder={`What are you crafting today?`}
+                placeholder="What are you crafting today?"
                 autoFocus
                 rows={4}
                 disabled={uploading}
@@ -236,9 +244,8 @@ export default function CreatePostModal({ isOpen, onClose }) {
                   borderBottom: '1px solid var(--border)',
                   color: 'var(--text-primary)',
                   fontFamily: 'var(--font-body)', fontSize: 15,
-                  lineHeight: 1.6, resize: 'none',
-                  outline: 'none', boxSizing: 'border-box',
-                  marginBottom: 12,
+                  lineHeight: 1.6, resize: 'none', outline: 'none',
+                  boxSizing: 'border-box', marginBottom: 12,
                   opacity: uploading ? 0.6 : 1,
                 }}
               />
@@ -249,7 +256,7 @@ export default function CreatePostModal({ isOpen, onClose }) {
                   <img
                     src={imagePreview}
                     alt="Preview"
-                    style={{ width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: 10 }}
+                    style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 10 }}
                   />
                   <button
                     type="button"
@@ -271,51 +278,52 @@ export default function CreatePostModal({ isOpen, onClose }) {
               {/* Error */}
               {error && (
                 <div style={{
-                  fontFamily: 'var(--font-body)', fontSize: 13,
-                  color: '#FCA5A5', marginBottom: 10,
-                  padding: '8px 12px',
+                  fontFamily: 'var(--font-body)', fontSize: 13, color: '#FCA5A5',
+                  marginBottom: 12, padding: '8px 12px',
                   background: 'rgba(239,68,68,0.1)',
-                  border: '1px solid rgba(239,68,68,0.2)',
-                  borderRadius: 8,
+                  border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8,
                 }}>
                   {error}
                 </div>
               )}
+
+              {/* Bottom padding so content doesn't hide behind footer */}
+              <div style={{ height: 8 }} />
             </div>
 
-            {/* Footer — pinned at bottom, never scrolls away */}
+            {/* Footer — PINNED, never scrolls, flexShrink:0 prevents compression */}
             <div style={{
+              flexShrink: 0,              // never compress — always visible
               padding: '12px 20px',
               borderTop: '1px solid var(--border)',
-              display: 'flex', alignItems: 'center', gap: 8,
               background: 'var(--surface)',
-              flexShrink: 0,
+              display: 'flex', alignItems: 'center', gap: 8,
             }}>
-              {/* Attach image */}
+              {/* Image attach */}
               <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} style={{ display: 'none' }} />
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
                 disabled={uploading}
                 style={{
-                  background: 'none', border: 'none', cursor: uploading ? 'not-allowed' : 'pointer',
+                  background: 'none', border: 'none',
+                  cursor: uploading ? 'not-allowed' : 'pointer',
                   color: imageFile ? 'var(--accent)' : 'var(--text-muted)',
                   padding: 8, borderRadius: 8, display: 'flex',
                   transition: 'background 150ms, color 150ms',
                   opacity: uploading ? 0.4 : 1,
                 }}
-                onMouseEnter={e => { if (!uploading && !imageFile) { e.currentTarget.style.background = 'var(--surface-raised)'; e.currentTarget.style.color = 'var(--accent)' } }}
-                onMouseLeave={e => { if (!imageFile) { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-muted)' } }}
-                title="Attach image"
+                onMouseEnter={e => { if (!uploading && !imageFile) { e.currentTarget.style.background = 'var(--surface-raised)'; e.currentTarget.style.color = 'var(--accent)' }}}
+                onMouseLeave={e => { if (!imageFile) { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-muted)' }}}
+                title="Attach image (max 5MB)"
               >
                 <Image size={17} />
               </button>
 
-              {/* Char count */}
+              {/* Char counter */}
               <span style={{
-                fontFamily: 'var(--font-mono)', fontSize: 11,
+                fontFamily: 'var(--font-mono)', fontSize: 11, marginLeft: 'auto',
                 color: charsLeft < 50 ? (charsLeft < 20 ? 'var(--danger)' : 'var(--primary)') : 'var(--text-muted)',
-                marginLeft: 'auto',
               }}>
                 {charsLeft}
               </span>
@@ -337,7 +345,7 @@ export default function CreatePostModal({ isOpen, onClose }) {
                   fontFamily: 'var(--font-heading)', fontSize: 12, fontWeight: 700,
                   letterSpacing: '0.04em',
                   cursor: canPost ? 'pointer' : 'not-allowed',
-                  transition: 'all 200ms', minWidth: 80,
+                  transition: 'all 200ms', minWidth: 88,
                   justifyContent: 'center',
                 }}
               >
