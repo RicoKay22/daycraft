@@ -20,18 +20,25 @@ export default function CreatePostModal({ isOpen, onClose }) {
   const { user, profile } = useAuth()
   const dispatch          = useDispatch()
 
-  const [content,   setContent]   = useState('')
-  const [postType,  setPostType]  = useState('dev')
-  const [imageFile, setImageFile] = useState(null)
+  const [content,      setContent]      = useState('')
+  const [postType,     setPostType]     = useState('dev')
+  const [imageFile,    setImageFile]    = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
-  const [uploading, setUploading] = useState(false)
-  const [error,     setError]     = useState('')
+  const [uploading,    setUploading]    = useState(false)
+  const [error,        setError]        = useState('')
   const fileRef = useRef(null)
 
   const charsLeft = MAX_CHARS - content.length
   const canPost   = content.trim().length > 0 && !uploading
 
+  // Use profile data with fallbacks — profile may not be loaded yet
+  const displayUsername = profile?.username || user?.email?.split('@')[0] || 'you'
+  const displayName     = profile?.full_name || displayUsername
+  const displayAvatar   = profile?.avatar_url || null
+  const displayInitials = displayUsername.slice(0, 2).toUpperCase()
+
   function handleClose() {
+    if (uploading) return  // don't close while posting
     setContent(''); setImageFile(null); setImagePreview(null)
     setError(''); setPostType('dev'); setUploading(false)
     onClose()
@@ -48,7 +55,7 @@ export default function CreatePostModal({ isOpen, onClose }) {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!canPost) return
+    if (!canPost || !user) return
     setUploading(true); setError('')
 
     try {
@@ -56,13 +63,13 @@ export default function CreatePostModal({ isOpen, onClose }) {
 
       // Upload image if attached
       if (imageFile) {
-        const ext  = imageFile.name.split('.').pop()
+        const ext  = imageFile.name.split('.').pop().toLowerCase()
         const path = `${user.id}/${Date.now()}.${ext}`
         const { error: uploadErr } = await supabase.storage
           .from('daycraft-media')
           .upload(path, imageFile, { cacheControl: '3600', upsert: false })
 
-        if (uploadErr) throw uploadErr
+        if (uploadErr) throw new Error(`Image upload failed: ${uploadErr.message}`)
 
         const { data: urlData } = supabase.storage
           .from('daycraft-media')
@@ -70,24 +77,30 @@ export default function CreatePostModal({ isOpen, onClose }) {
         imageUrl = urlData.publicUrl
       }
 
-      // Prefix content with type tag so auto-detection works
-      const typePrefix = `[${postType.toUpperCase()}] `
+      // Prefix content with type tag
+      const typePrefix   = `[${postType.toUpperCase()}] `
       const finalContent = content.startsWith('[') ? content : typePrefix + content
 
-      await dispatch(createPost({
+      const result = await dispatch(createPost({
         userId:   user.id,
         content:  finalContent,
         imageUrl,
         author: {
           id:         user.id,
-          username:   profile?.username || user.email?.split('@')[0],
-          full_name:  profile?.full_name || '',
-          avatar_url: profile?.avatar_url || '',
+          username:   displayUsername,
+          full_name:  displayName,
+          avatar_url: displayAvatar || '',
         },
-      })).unwrap()
+      }))
+
+      // Check if the dispatch was rejected
+      if (createPost.rejected.match(result)) {
+        throw new Error(result.payload || 'Failed to create post')
+      }
 
       handleClose()
     } catch (err) {
+      console.error('Post creation error:', err)
       setError(err.message || 'Failed to create post. Please try again.')
       setUploading(false)
     }
@@ -107,108 +120,116 @@ export default function CreatePostModal({ isOpen, onClose }) {
             onClick={handleClose}
             style={{
               position: 'fixed', inset: 0,
-              background: 'rgba(0,0,0,0.7)',
+              background: 'rgba(0,0,0,0.75)',
               backdropFilter: 'blur(4px)',
               zIndex: 200,
             }}
           />
 
-          {/* Modal */}
+          {/* Modal — fixed position, scrollable internally */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.96, y: 16 }}
+            initial={{ opacity: 0, scale: 0.96, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: 8 }}
+            exit={{ opacity: 0, scale: 0.96, y: 10 }}
             transition={{ type: 'spring', stiffness: 280, damping: 28 }}
             style={{
               position: 'fixed',
               top: '50%', left: '50%',
               transform: 'translate(-50%, -50%)',
-              width: '100%', maxWidth: 520,
+              width: 'calc(100% - 32px)',
+              maxWidth: 520,
+              maxHeight: 'calc(100dvh - 48px)',
               background: 'var(--surface)',
               border: '1px solid var(--border)',
               borderRadius: 16,
-              padding: '20px 20px 16px',
               zIndex: 201,
-              maxHeight: '90dvh',
-              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',  // clip the rounded corners
             }}
           >
-            {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{
-                fontFamily: 'var(--font-heading)', fontSize: 16,
-                color: 'var(--text-primary)', margin: 0, flex: 1,
-              }}>
-                New post
-              </h3>
-              <button onClick={handleClose} style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                color: 'var(--text-muted)', padding: 6, borderRadius: 7,
-                display: 'flex', transition: 'background 150ms',
-              }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-raised)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'none'}
-              >
-                <X size={18} />
-              </button>
-            </div>
+            {/* Scrollable inner area */}
+            <div style={{ overflowY: 'auto', padding: '20px 20px 0', flex: 1 }}>
 
-            {/* Post type selector */}
-            <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-              {TYPE_OPTIONS.map(type => {
-                const Icon    = type.icon
-                const active  = postType === type.id
-                return (
-                  <button
-                    key={type.id}
-                    onClick={() => setPostType(type.id)}
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 5,
-                      padding: '5px 10px',
-                      background: active ? `${type.color}18` : 'var(--surface-raised)',
-                      border: `1px solid ${active ? type.color + '50' : 'var(--border)'}`,
-                      borderRadius: 9999,
-                      color: active ? type.color : 'var(--text-secondary)',
-                      fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
-                      letterSpacing: '0.05em', cursor: 'pointer',
-                      transition: 'all 150ms',
-                    }}
-                  >
-                    <Icon size={11} />
-                    {type.label}
-                  </button>
-                )
-              })}
-            </div>
-
-            {/* User info row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: 9,
-                background: profile?.avatar_url ? 'transparent' : 'var(--primary)',
-                overflow: 'hidden', flexShrink: 0,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                {profile?.avatar_url
-                  ? <img src={profile.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  : <span style={{ fontFamily: 'var(--font-heading)', fontSize: 11, fontWeight: 700, color: '#0B0B0E' }}>
-                      {(profile?.username || 'U').slice(0, 2).toUpperCase()}
-                    </span>
-                }
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+                <h3 style={{
+                  fontFamily: 'var(--font-heading)', fontSize: 16,
+                  color: 'var(--text-primary)', margin: 0, flex: 1,
+                }}>
+                  New post
+                </h3>
+                <button
+                  onClick={handleClose}
+                  disabled={uploading}
+                  style={{
+                    background: 'none', border: 'none', cursor: uploading ? 'not-allowed' : 'pointer',
+                    color: 'var(--text-muted)', padding: 6, borderRadius: 7,
+                    display: 'flex', opacity: uploading ? 0.4 : 1,
+                  }}
+                  onMouseEnter={e => { if (!uploading) e.currentTarget.style.background = 'var(--surface-raised)' }}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                >
+                  <X size={18} />
+                </button>
               </div>
-              <span style={{ fontFamily: 'var(--font-heading)', fontSize: 13, color: 'var(--text-secondary)' }}>
-                @{profile?.username || 'you'}
-              </span>
-            </div>
 
-            {/* Textarea */}
-            <form onSubmit={handleSubmit}>
+              {/* Post type selector */}
+              <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+                {TYPE_OPTIONS.map(type => {
+                  const Icon   = type.icon
+                  const active = postType === type.id
+                  return (
+                    <button
+                      key={type.id}
+                      onClick={() => setPostType(type.id)}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '5px 10px',
+                        background: active ? `${type.color}18` : 'var(--surface-raised)',
+                        border: `1px solid ${active ? type.color + '50' : 'var(--border)'}`,
+                        borderRadius: 9999,
+                        color: active ? type.color : 'var(--text-secondary)',
+                        fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
+                        letterSpacing: '0.05em', cursor: 'pointer', transition: 'all 150ms',
+                      }}
+                    >
+                      <Icon size={11} />
+                      {type.label}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* User info row */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                <div style={{
+                  width: 32, height: 32, borderRadius: 9,
+                  background: displayAvatar ? 'transparent' : 'var(--primary)',
+                  overflow: 'hidden', flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  border: '1px solid var(--border)',
+                }}>
+                  {displayAvatar
+                    ? <img src={displayAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <span style={{ fontFamily: 'var(--font-heading)', fontSize: 11, fontWeight: 700, color: '#0B0B0E' }}>
+                        {displayInitials}
+                      </span>
+                  }
+                </div>
+                <span style={{ fontFamily: 'var(--font-heading)', fontSize: 13, color: 'var(--text-secondary)' }}>
+                  @{displayUsername}
+                </span>
+              </div>
+
+              {/* Textarea */}
               <textarea
                 value={content}
                 onChange={e => setContent(e.target.value.slice(0, MAX_CHARS))}
-                placeholder={`What are you crafting today? Share your ${postType === 'dev' ? 'code progress' : postType === 'workout' ? 'workout log' : postType === 'read' ? 'reading update' : 'build update'}...`}
+                placeholder={`What are you crafting today?`}
                 autoFocus
                 rows={4}
+                disabled={uploading}
                 style={{
                   width: '100%', padding: '10px 0',
                   background: 'transparent', border: 'none',
@@ -218,6 +239,7 @@ export default function CreatePostModal({ isOpen, onClose }) {
                   lineHeight: 1.6, resize: 'none',
                   outline: 'none', boxSizing: 'border-box',
                   marginBottom: 12,
+                  opacity: uploading ? 0.6 : 1,
                 }}
               />
 
@@ -227,97 +249,104 @@ export default function CreatePostModal({ isOpen, onClose }) {
                   <img
                     src={imagePreview}
                     alt="Preview"
-                    style={{ width: '100%', maxHeight: 240, objectFit: 'cover', borderRadius: 10 }}
+                    style={{ width: '100%', maxHeight: 220, objectFit: 'cover', borderRadius: 10 }}
                   />
                   <button
                     type="button"
                     onClick={() => { setImageFile(null); setImagePreview(null) }}
+                    disabled={uploading}
                     style={{
                       position: 'absolute', top: 8, right: 8,
-                      background: 'rgba(0,0,0,0.6)', border: 'none',
-                      borderRadius: '50%', width: 24, height: 24,
+                      background: 'rgba(0,0,0,0.65)', border: 'none',
+                      borderRadius: '50%', width: 26, height: 26,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      cursor: 'pointer', color: '#fff',
+                      cursor: uploading ? 'not-allowed' : 'pointer', color: '#fff',
                     }}
                   >
-                    <X size={12} />
+                    <X size={13} />
                   </button>
                 </div>
               )}
 
               {/* Error */}
               {error && (
-                <p style={{
+                <div style={{
                   fontFamily: 'var(--font-body)', fontSize: 13,
-                  color: '#FCA5A5', margin: '0 0 10px',
+                  color: '#FCA5A5', marginBottom: 10,
                   padding: '8px 12px',
                   background: 'rgba(239,68,68,0.1)',
+                  border: '1px solid rgba(239,68,68,0.2)',
                   borderRadius: 8,
                 }}>
                   {error}
-                </p>
+                </div>
               )}
+            </div>
 
-              {/* Footer actions */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {/* Attach image */}
-                <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} style={{ display: 'none' }} />
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  style={{
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    color: 'var(--text-muted)', padding: 8, borderRadius: 8,
-                    display: 'flex', transition: 'background 150ms, color 150ms',
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.background = 'var(--surface-raised)'
-                    e.currentTarget.style.color = 'var(--accent)'
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.background = 'none'
-                    e.currentTarget.style.color = 'var(--text-muted)'
-                  }}
-                  title="Attach image"
-                >
-                  <Image size={17} />
-                </button>
+            {/* Footer — pinned at bottom, never scrolls away */}
+            <div style={{
+              padding: '12px 20px',
+              borderTop: '1px solid var(--border)',
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: 'var(--surface)',
+              flexShrink: 0,
+            }}>
+              {/* Attach image */}
+              <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} style={{ display: 'none' }} />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={uploading}
+                style={{
+                  background: 'none', border: 'none', cursor: uploading ? 'not-allowed' : 'pointer',
+                  color: imageFile ? 'var(--accent)' : 'var(--text-muted)',
+                  padding: 8, borderRadius: 8, display: 'flex',
+                  transition: 'background 150ms, color 150ms',
+                  opacity: uploading ? 0.4 : 1,
+                }}
+                onMouseEnter={e => { if (!uploading && !imageFile) { e.currentTarget.style.background = 'var(--surface-raised)'; e.currentTarget.style.color = 'var(--accent)' } }}
+                onMouseLeave={e => { if (!imageFile) { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-muted)' } }}
+                title="Attach image"
+              >
+                <Image size={17} />
+              </button>
 
-                {/* Char count */}
-                <span style={{
-                  fontFamily: 'var(--font-mono)', fontSize: 11,
-                  color: charsLeft < 50 ? (charsLeft < 20 ? 'var(--danger)' : 'var(--primary)') : 'var(--text-muted)',
-                  marginLeft: 'auto',
-                }}>
-                  {charsLeft}
-                </span>
+              {/* Char count */}
+              <span style={{
+                fontFamily: 'var(--font-mono)', fontSize: 11,
+                color: charsLeft < 50 ? (charsLeft < 20 ? 'var(--danger)' : 'var(--primary)') : 'var(--text-muted)',
+                marginLeft: 'auto',
+              }}>
+                {charsLeft}
+              </span>
 
-                {/* Post button */}
-                <motion.button
-                  type="submit"
-                  disabled={!canPost}
-                  whileHover={{ scale: canPost ? 1.02 : 1 }}
-                  whileTap={{ scale: canPost ? 0.97 : 1 }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 7,
-                    padding: '9px 18px',
-                    background: canPost ? 'var(--primary)' : 'var(--surface-raised)',
-                    border: `1px solid ${canPost ? 'var(--primary)' : 'var(--border)'}`,
-                    borderRadius: 9999,
-                    color: canPost ? '#0B0B0E' : 'var(--text-muted)',
-                    fontFamily: 'var(--font-heading)', fontSize: 12, fontWeight: 700,
-                    letterSpacing: '0.04em',
-                    cursor: canPost ? 'pointer' : 'not-allowed',
-                    transition: 'all 200ms',
-                  }}
-                >
-                  {uploading
-                    ? <><Loader2 size={13} style={{ animation: 'spin 0.7s linear infinite' }} /> Posting...</>
-                    : <><Send size={13} /> Post</>
-                  }
-                </motion.button>
-              </div>
-            </form>
+              {/* Post button */}
+              <motion.button
+                type="button"
+                onClick={handleSubmit}
+                disabled={!canPost}
+                whileHover={{ scale: canPost ? 1.02 : 1 }}
+                whileTap={{ scale: canPost ? 0.97 : 1 }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 7,
+                  padding: '9px 18px',
+                  background: canPost ? 'var(--primary)' : 'var(--surface-raised)',
+                  border: `1px solid ${canPost ? 'var(--primary)' : 'var(--border)'}`,
+                  borderRadius: 9999,
+                  color: canPost ? '#0B0B0E' : 'var(--text-muted)',
+                  fontFamily: 'var(--font-heading)', fontSize: 12, fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  cursor: canPost ? 'pointer' : 'not-allowed',
+                  transition: 'all 200ms', minWidth: 80,
+                  justifyContent: 'center',
+                }}
+              >
+                {uploading
+                  ? <><Loader2 size={13} style={{ animation: 'spin 0.7s linear infinite' }} /> Posting...</>
+                  : <><Send size={13} /> Post</>
+                }
+              </motion.button>
+            </div>
           </motion.div>
         </>
       )}

@@ -121,7 +121,7 @@ export default function AuthPage() {
     }
   }, [registered])
 
-  const { signIn, signUp, isAuthenticated, signOut } = useAuth()
+  const { signIn, signUp, isAuthenticated, signOut, loading: authLoading } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const from     = location.state?.from?.pathname || '/'
@@ -129,13 +129,13 @@ export default function AuthPage() {
   const params        = new URLSearchParams(location.search)
   const justConfirmed = params.get('confirmed') === 'true'
 
-  // ── Auth redirect / confirmation handler ─────────────────────────────────────
+  // ── Auth redirect — guard with authLoading to prevent premature redirect ──────
   useEffect(() => {
+    if (authLoading) return
     if (!isAuthenticated) return
-    if (registered) return   // don't navigate away while showing success screen
+    if (registered) return
 
     if (justConfirmed) {
-      // Email confirmed — sign out auto-session, show confirmed message
       signOut()
       setRegistered(false)
       setSuccess('Email confirmed! You can now sign in with your password.')
@@ -144,7 +144,7 @@ export default function AuthPage() {
     }
 
     navigate(from, { replace: true })
-  }, [isAuthenticated, justConfirmed, registered])
+  }, [authLoading, isAuthenticated, justConfirmed, registered])
 
   const strength    = getStrength(password)
   const allRulesMet = RULES.every(r => r.test(password))
@@ -162,16 +162,29 @@ export default function AuthPage() {
     return data === null
   }
 
-  // Prevents SMTP delays from hanging the UI indefinitely
-async function signUpWithTimeout(email, password, username) {
-  const timeout = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error('Request is taking too long. Please try again.')), 15000)
-  )
-  return Promise.race([
-    signUp(email, password, username),
-    timeout
-  ])
-}
+  // ── signUpWithTimeout — prevents SMTP hangs blocking UI ─────────────────────
+  const lastRequestRef = { current: 0 }
+
+  async function signUpWithTimeout(emailArg, passwordArg, usernameArg) {
+    const requestId = Date.now()
+    lastRequestRef.current = requestId
+
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Request is taking too long. Please try again.')), 15000)
+    )
+
+    const result = await Promise.race([
+      signUp(emailArg, passwordArg, usernameArg),
+      timeout
+    ])
+
+    // Ignore late responses from ghost requests
+    if (lastRequestRef.current !== requestId) {
+      throw new Error('Request was superseded by a newer request.')
+    }
+
+    return result
+  }
 
   // ── handleSubmit ──────────────────────────────────────────────────────────────
   async function handleSubmit(e) {
@@ -187,7 +200,6 @@ async function signUpWithTimeout(email, password, username) {
         navigate(from, { replace: true })
 
       } else {
-        await supabase.auth.signOut().catch(() => {})
         // Check username before anything else
         const available = await checkUsernameAvailable(username)
         if (!available) {
@@ -196,26 +208,23 @@ async function signUpWithTimeout(email, password, username) {
           return
         }
 
-        // LOCK UI immediately before network call — prevents multiple emails
-        setRegistered(true)
-        setRegisteredEmail(email)
-
         const { data } = await signUpWithTimeout(email, password, username.toLowerCase().trim())
 
         // Duplicate email — Supabase returns identities: []
         if (data?.user?.identities?.length === 0) {
-          setRegistered(false)   // unlock
           setError('An account with this email already exists. Please sign in instead.')
           setLoading(false)
           return
         }
 
         if (data?.session) {
-          // Email confirmation disabled (shouldn't happen in prod)
-          setRegistered(false)
           navigate(from, { replace: true })
+          return
         }
-        // registered=true stays — success screen is now showing
+
+        // SUCCESS — set registered only after confirmed (no flicker)
+        setRegisteredEmail(email)
+        setRegistered(true)
       }
     } catch (err) {
       setRegistered(false)   // unlock on any error
