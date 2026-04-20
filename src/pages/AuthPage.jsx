@@ -135,20 +135,17 @@ const justConfirmed = params.get('confirmed') === 'true'
 
 useEffect(() => {
   if (!isAuthenticated) return
+  if (registered) return  // ← ADD THIS — don't navigate if showing success screen
 
   if (justConfirmed) {
-    // User clicked confirmation link — auto-session was created
-    // Sign them out silently so they enter credentials intentionally
-    // This is intentional UX: confirm email ≠ logged in yet
     signOut()
     setSuccess('Email confirmed! You can now sign in with your password.')
     setTab('login')
     return
   }
 
-  // Normal authenticated redirect
   navigate(from, { replace: true })
-}, [isAuthenticated, justConfirmed])
+}, [isAuthenticated, justConfirmed, registered])
 
   const strength    = getStrength(password)
   const allRulesMet = RULES.every(r => r.test(password))
