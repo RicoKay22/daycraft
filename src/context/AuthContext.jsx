@@ -9,6 +9,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
   const isProcessingAuth      = useRef(false)
 
+  // ─── fetchProfile ─────────────────────────────────────────────────────────
   const fetchProfile = async (userId) => {
     const { data, error } = await supabase
       .from('profiles').select('*').eq('id', userId).single()
@@ -16,6 +17,7 @@ export function AuthProvider({ children }) {
     return data
   }
 
+  // ─── ensureProfile — never overwrites existing username (Section 6 rule 8) ─
   const ensureProfile = async (userId, meta = {}) => {
     const { data: existing } = await supabase
       .from('profiles').select('id, username').eq('id', userId).single()
@@ -42,43 +44,45 @@ export function AuthProvider({ children }) {
     return newProfile
   }
 
+  // ─── signIn — immediately sets user (Section 6 rule 2) ────────────────────
   async function signIn(email, password) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
-     if (data?.user) {
+    if (data?.user) {
       setUser(data.user)
       fetchProfile(data.user.id)
     }
     return data
   }
 
+  // ─── signUp — emailRedirectTo returns to /auth?confirmed=true ─────────────
   async function signUp(email, password, username) {
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: { username, full_name: username },
-      // After confirmation click, land back on AuthPage with a flag
-      emailRedirectTo: `${window.location.origin}/auth?confirmed=true`,
-    },
-  })
-  if (error) throw error
-
-  // Only create profile for a genuinely new user (identities will be populated)
-  if (data?.user && data.user.identities?.length > 0) {
-    await ensureProfile(data.user.id, { username, email })
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { username, full_name: username },
+        emailRedirectTo: `${window.location.origin}/auth?confirmed=true`,
+      },
+    })
+    if (error) throw error
+    // Only create profile for genuinely new users (duplicate = identities: [])
+    if (data?.user && data.user.identities?.length > 0) {
+      await ensureProfile(data.user.id, { username, email })
+    }
+    return data
   }
 
-  return data
-}
-
+  // ─── signOut — instant UI reset (Section 6 rule 3) ────────────────────────
   async function signOut() {
     setUser(null)
     setProfile(null)
     supabase.auth.signOut().catch(() => {})
   }
 
+  // ─── Single onAuthStateChange listener (Section 6 rule 1) ─────────────────
   useEffect(() => {
+    // Section 6 rule 4 — recovery page isolation
     const isRecoveryFlow =
       window.location.pathname === '/update-password' ||
       window.location.hash.includes('type=recovery')
@@ -88,15 +92,18 @@ export function AuthProvider({ children }) {
       return
     }
 
-      supabase.auth.getSession().then(({ data: { session } }) => {
-  if (session?.user) {
-    setUser(session.user)
-    fetchProfile(session.user.id).finally(() => setLoading(false))
-  } else {
-    setLoading(false)
-  }
-})
+    // Keep loading:true until BOTH user and profile are set
+    // This prevents AuthGuard from redirecting before session is restored
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser(session.user)
+        fetchProfile(session.user.id).finally(() => setLoading(false))
+      } else {
+        setLoading(false)
+      }
+    })
 
+    // ONE listener only (Section 6 rule 1)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (isProcessingAuth.current) return
@@ -125,8 +132,10 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      user, profile, loading, signIn, signUp, signOut,
-      fetchProfile, ensureProfile, isAuthenticated: !!user,
+      user, profile, loading,
+      signIn, signUp, signOut,
+      fetchProfile, ensureProfile,
+      isAuthenticated: !!user,
     }}>
       {children}
     </AuthContext.Provider>
