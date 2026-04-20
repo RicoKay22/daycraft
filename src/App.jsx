@@ -4,6 +4,7 @@ import { store } from './store'
 import { ThemeProvider } from './context/ThemeContext'
 import { AuthProvider } from './context/AuthContext'
 import AuthGuard from './components/AuthGuard'
+import AppLayout from './components/layout/AppLayout'
 
 // Pages
 import AuthPage           from './pages/AuthPage'
@@ -16,6 +17,17 @@ import DashboardPage      from './pages/DashboardPage'
 import NotFoundPage       from './pages/NotFoundPage'
 import UpdatePasswordPage from './pages/UpdatePasswordPage'
 
+// Wrap a page in AuthGuard + AppLayout
+function ProtectedPage({ children }) {
+  return (
+    <AuthGuard>
+      <AppLayout>
+        {children}
+      </AppLayout>
+    </AuthGuard>
+  )
+}
+
 export default function App() {
   return (
     <Provider store={store}>
@@ -23,33 +35,33 @@ export default function App() {
         <AuthProvider>
           <BrowserRouter>
             <Routes>
-              {/* Public routes */}
+              {/* Public */}
               <Route path="/auth"            element={<AuthPage />} />
               <Route path="/update-password" element={<UpdatePasswordPage />} />
 
-              {/* Protected routes */}
+              {/* Protected — all wrapped in AppLayout */}
               <Route path="/" element={
-                <AuthGuard><FeedPage /></AuthGuard>
+                <ProtectedPage><FeedPage /></ProtectedPage>
               } />
               <Route path="/explore" element={
-                <AuthGuard><ExplorePage /></AuthGuard>
+                <ProtectedPage><ExplorePage /></ProtectedPage>
               } />
               <Route path="/notifications" element={
-                <AuthGuard><NotificationsPage /></AuthGuard>
+                <ProtectedPage><NotificationsPage /></ProtectedPage>
               } />
               <Route path="/dashboard" element={
-                <AuthGuard><DashboardPage /></AuthGuard>
+                <ProtectedPage><DashboardPage /></ProtectedPage>
               } />
               <Route path="/profile/:username" element={
-                <AuthGuard><ProfilePage /></AuthGuard>
+                <ProtectedPage><ProfilePage /></ProtectedPage>
               } />
               <Route path="/post/:postId" element={
-                <AuthGuard><PostDetailPage /></AuthGuard>
+                <ProtectedPage><PostDetailPage /></ProtectedPage>
               } />
 
               {/* Fallback */}
-              <Route path="/404"  element={<NotFoundPage />} />
-              <Route path="*"     element={<Navigate to="/404" replace />} />
+              <Route path="/404" element={<NotFoundPage />} />
+              <Route path="*"    element={<Navigate to="/404" replace />} />
             </Routes>
           </BrowserRouter>
         </AuthProvider>
