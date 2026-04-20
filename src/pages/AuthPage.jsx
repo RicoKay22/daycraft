@@ -162,6 +162,17 @@ export default function AuthPage() {
     return data === null
   }
 
+  // Prevents SMTP delays from hanging the UI indefinitely
+async function signUpWithTimeout(email, password, username) {
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Request is taking too long. Please try again.')), 15000)
+  )
+  return Promise.race([
+    signUp(email, password, username),
+    timeout
+  ])
+}
+
   // ── handleSubmit ──────────────────────────────────────────────────────────────
   async function handleSubmit(e) {
     e.preventDefault()
@@ -176,6 +187,7 @@ export default function AuthPage() {
         navigate(from, { replace: true })
 
       } else {
+        await supabase.auth.signOut().catch(() => {})
         // Check username before anything else
         const available = await checkUsernameAvailable(username)
         if (!available) {
@@ -188,7 +200,7 @@ export default function AuthPage() {
         setRegistered(true)
         setRegisteredEmail(email)
 
-        const { data } = await signUp(email, password, username.toLowerCase().trim())
+        const { data } = await signUpWithTimeout(email, password, username.toLowerCase().trim())
 
         // Duplicate email — Supabase returns identities: []
         if (data?.user?.identities?.length === 0) {
