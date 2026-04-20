@@ -88,13 +88,14 @@ export function AuthProvider({ children }) {
       return
     }
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser(session.user)
-        fetchProfile(session.user.id)
-      }
-      setLoading(false)
-    })
+      supabase.auth.getSession().then(({ data: { session } }) => {
+  if (session?.user) {
+    setUser(session.user)
+    fetchProfile(session.user.id).finally(() => setLoading(false))
+  } else {
+    setLoading(false)
+  }
+})
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {

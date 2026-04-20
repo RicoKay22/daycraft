@@ -122,6 +122,7 @@ export default function AuthPage() {
   const [gLoading, setGLoading] = useState(false)
   const [error, setError]       = useState('')
   const [success, setSuccess]   = useState('')
+  const [registered, setRegistered] = useState(false)
 
   const { signIn, signUp, isAuthenticated, signOut } = useAuth()
 const navigate = useNavigate()
@@ -195,10 +196,8 @@ useEffect(() => {
         return
       }
 
-     if (data?.user && !data.session) {
-  setTab('login')
-  setError('')
-  setSuccess('Account created! Check your email to confirm your account before signing in.')
+      if (data?.user && !data.session) {
+  setRegistered(true)   // locks UI — no tab switch, no message clear
   setPassword('')
   setUsername('')
 }
@@ -260,7 +259,7 @@ useEffect(() => {
     if (error) throw error
     // NOTE: Supabase always returns success here even if email doesn't exist
     // This is intentional — prevents email enumeration attacks
-    setSuccess('If an account exists for this email, a reset link has been sent. Check your inbox/spam folder.')
+    setSuccess('If an account exists for this email, a reset link has been sent. Check your inbox and spam folder.')
   } catch (err) {
     const msg = err.message || ''
     if (msg.includes('rate limit') || msg.includes('after')) {
@@ -271,6 +270,80 @@ useEffect(() => {
   } finally {
     setLoading(false)
   }
+}
+
+
+  // ── Registration success screen ─────────────────────────────────────────
+if (registered) {
+  return (
+    <div style={{ display: 'flex', minHeight: '100dvh', background: 'var(--bg)', alignItems: 'center', justifyContent: 'center', padding: '32px 24px' }}>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        style={{ maxWidth: 440, width: '100%', textAlign: 'center' }}
+      >
+        {/* Animated checkmark */}
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ type: 'spring', stiffness: 200, delay: 0.1 }}
+          style={{
+            width: 72, height: 72, borderRadius: '50%',
+            background: 'rgba(34,197,94,0.12)',
+            border: '2px solid rgba(34,197,94,0.4)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 24px',
+          }}
+        >
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+        </motion.div>
+
+        <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: 26, color: 'var(--text-primary)', margin: '0 0 12px' }}>
+          Account created!
+        </h2>
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 8px' }}>
+          A confirmation link has been sent to:
+        </p>
+        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--primary)', margin: '0 0 24px' }}>
+          {email}
+        </p>
+        <div style={{
+          padding: '14px 16px',
+          background: 'rgba(34,197,94,0.08)',
+          border: '1px solid rgba(34,197,94,0.2)',
+          borderRadius: 10,
+          fontFamily: 'var(--font-body)', fontSize: 13,
+          color: 'var(--text-secondary)', lineHeight: 1.6,
+          marginBottom: 32,
+        }}>
+          Click the link in the email to verify your account, then come back here to sign in.
+          <br /><br />
+          <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+            Don't see it? Check your <strong style={{ color: 'var(--text-secondary)' }}>spam or junk folder</strong>.
+          </span>
+        </div>
+
+        <button
+          onClick={() => { setRegistered(false); setTab('login'); setSuccess('Email confirmed? Sign in below.') }}
+          style={{
+            width: '100%', padding: '12px 20px',
+            background: 'var(--primary)', border: 'none', borderRadius: 9999,
+            color: '#0B0B0E', fontFamily: 'var(--font-heading)', fontSize: 13, fontWeight: 700,
+            letterSpacing: '0.04em', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          }}
+        >
+          Go to sign in <ArrowRight size={14} />
+        </button>
+
+        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', marginTop: 40, letterSpacing: '0.06em' }}>
+          RICO KAY · WHERE DESIGN MEETS LOGIC
+        </p>
+      </motion.div>
+    </div>
+  )
 }
 
   return (
