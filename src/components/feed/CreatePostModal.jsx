@@ -18,7 +18,7 @@ const MAX_CHARS = 500
 
 export default function CreatePostModal({ isOpen, onClose }) {
   const { user, profile } = useAuth()
-  const dispatch          = useDispatch()
+  const dispatch           = useDispatch()
 
   const [content,      setContent]      = useState('')
   const [postType,     setPostType]     = useState('dev')
@@ -69,12 +69,8 @@ export default function CreatePostModal({ isOpen, onClose }) {
         const { error: uploadErr } = await supabase.storage
           .from('daycraft-media')
           .upload(path, imageFile, { cacheControl: '3600', upsert: false })
-
         if (uploadErr) throw new Error(`Image upload failed: ${uploadErr.message}`)
-
-        const { data: urlData } = supabase.storage
-          .from('daycraft-media')
-          .getPublicUrl(path)
+        const { data: urlData } = supabase.storage.from('daycraft-media').getPublicUrl(path)
         imageUrl = urlData.publicUrl
       }
 
@@ -85,16 +81,11 @@ export default function CreatePostModal({ isOpen, onClose }) {
         userId:   user.id,
         content:  finalContent,
         imageUrl,
-        author: {
-          id:         user.id,
-          username:   displayUsername,
-          full_name:  displayName,
-          avatar_url: displayAvatar || '',
-        },
+        author: { id: user.id, username: displayUsername, full_name: displayName, avatar_url: displayAvatar || '' },
       }))
 
       if (createPost.rejected.match(result)) {
-        throw new Error(result.payload || 'Failed to create post. Please try again.')
+        throw new Error(result.payload || 'Failed to create post')
       }
 
       resetAndClose()
@@ -111,7 +102,9 @@ export default function CreatePostModal({ isOpen, onClose }) {
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
+          {/* 
+            BACKDROP — fills entire screen, click to close
+          */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -119,242 +112,240 @@ export default function CreatePostModal({ isOpen, onClose }) {
             onClick={handleClose}
             style={{
               position: 'fixed', inset: 0,
-              background: 'rgba(0,0,0,0.75)',
+              background: 'rgba(0,0,0,0.78)',
               backdropFilter: 'blur(4px)',
+              WebkitBackdropFilter: 'blur(4px)',
               zIndex: 200,
-            }}
-          />
-
-          {/* Modal — anchored to top with capped max-height */}
-          <motion.div
-            initial={{ opacity: 0, y: 24, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 12, scale: 0.97 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            style={{
-              position: 'fixed',
-              // Top-anchored: never goes off the top, grows downward
-              // max-height caps it so it never goes off the bottom
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              width: 'calc(100% - 32px)',
-              maxWidth: 520,
-              // min() ensures modal never exceeds viewport height
-              maxHeight: 'min(580px, calc(100dvh - 32px))',
-              background: 'var(--surface)',
-              border: '1px solid var(--border)',
-              borderRadius: 16,
-              zIndex: 201,
-              // Flex column so footer stays pinned at bottom
+              // Flex container — modal centres itself inside this
               display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '16px',        // breathing room on all sides
             }}
           >
-            {/* Scrollable content area — takes remaining space */}
-            <div style={{
-              flex: '1 1 auto',
-              overflowY: 'auto',
-              padding: '20px 20px 0',
-              minHeight: 0,  // required for flex overflow to work
-            }}>
-              {/* Header */}
-              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
-                <h3 style={{
-                  fontFamily: 'var(--font-heading)', fontSize: 16,
-                  color: 'var(--text-primary)', margin: 0, flex: 1,
-                }}>
-                  New post
-                </h3>
+            {/*
+              MODAL — stop backdrop click from propagating
+              Uses 100% width with max-width + 100dvh with padding
+              so it ALWAYS fits whatever the viewport is
+            */}
+            <motion.div
+              initial={{ opacity: 0, y: 24, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.97 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              onClick={e => e.stopPropagation()}
+              style={{
+                width: '100%',
+                maxWidth: 520,
+                // maxHeight fills remaining space after the 16px padding on each side
+                maxHeight: 'calc(100dvh - 32px)',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: 16,
+                zIndex: 201,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+              }}
+            >
+              {/* ── Scrollable content ─────────────────────────────── */}
+              <div style={{
+                flex: '1 1 auto',
+                minHeight: 0,          // critical: enables flex child to scroll
+                overflowY: 'auto',
+                padding: '20px 20px 0',
+              }}>
+                {/* Header */}
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+                  <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: 16, color: 'var(--text-primary)', margin: 0, flex: 1 }}>
+                    New post
+                  </h3>
+                  <button
+                    onClick={handleClose}
+                    disabled={uploading}
+                    style={{
+                      background: 'none', border: 'none',
+                      cursor: uploading ? 'not-allowed' : 'pointer',
+                      color: 'var(--text-muted)', padding: 6, borderRadius: 7,
+                      display: 'flex', opacity: uploading ? 0.4 : 1,
+                      transition: 'background 150ms',
+                    }}
+                    onMouseEnter={e => { if (!uploading) e.currentTarget.style.background = 'var(--surface-raised)' }}
+                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* Type selector */}
+                <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+                  {TYPE_OPTIONS.map(type => {
+                    const Icon   = type.icon
+                    const active = postType === type.id
+                    return (
+                      <button
+                        key={type.id}
+                        onClick={() => setPostType(type.id)}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 5,
+                          padding: '5px 10px',
+                          background: active ? `${type.color}18` : 'var(--surface-raised)',
+                          border: `1px solid ${active ? type.color + '50' : 'var(--border)'}`,
+                          borderRadius: 9999,
+                          color: active ? type.color : 'var(--text-secondary)',
+                          fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
+                          letterSpacing: '0.05em', cursor: 'pointer', transition: 'all 150ms',
+                        }}
+                      >
+                        <Icon size={11} />
+                        {type.label}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* User chip */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                  <div style={{
+                    width: 32, height: 32, borderRadius: 9, flexShrink: 0,
+                    background: displayAvatar ? 'transparent' : 'var(--primary)',
+                    overflow: 'hidden',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    border: '1px solid var(--border)',
+                  }}>
+                    {displayAvatar
+                      ? <img src={displayAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : <span style={{ fontFamily: 'var(--font-heading)', fontSize: 11, fontWeight: 700, color: '#0B0B0E' }}>{displayInitials}</span>
+                    }
+                  </div>
+                  <span style={{ fontFamily: 'var(--font-heading)', fontSize: 13, color: 'var(--text-secondary)' }}>
+                    @{displayUsername}
+                  </span>
+                </div>
+
+                {/* Textarea */}
+                <textarea
+                  value={content}
+                  onChange={e => setContent(e.target.value.slice(0, MAX_CHARS))}
+                  placeholder="What are you crafting today?"
+                  autoFocus
+                  rows={4}
+                  disabled={uploading}
+                  style={{
+                    width: '100%', padding: '10px 0',
+                    background: 'transparent', border: 'none',
+                    borderBottom: '1px solid var(--border)',
+                    color: 'var(--text-primary)',
+                    fontFamily: 'var(--font-body)', fontSize: 15,
+                    lineHeight: 1.6, resize: 'none', outline: 'none',
+                    boxSizing: 'border-box', marginBottom: 12,
+                    opacity: uploading ? 0.6 : 1,
+                  }}
+                />
+
+                {/* Image preview — max 180px to leave room for footer */}
+                {imagePreview && (
+                  <div style={{ position: 'relative', marginBottom: 12 }}>
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 10, display: 'block' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => { setImageFile(null); setImagePreview(null) }}
+                      disabled={uploading}
+                      style={{
+                        position: 'absolute', top: 8, right: 8,
+                        background: 'rgba(0,0,0,0.68)', border: 'none',
+                        borderRadius: '50%', width: 26, height: 26,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: uploading ? 'not-allowed' : 'pointer', color: '#fff',
+                      }}
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                )}
+
+                {/* Error */}
+                {error && (
+                  <div style={{
+                    fontFamily: 'var(--font-body)', fontSize: 13, color: '#FCA5A5',
+                    marginBottom: 12, padding: '8px 12px',
+                    background: 'rgba(239,68,68,0.1)',
+                    border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8,
+                  }}>
+                    {error}
+                  </div>
+                )}
+
+                {/* Spacer so content isn't hidden under footer */}
+                <div style={{ height: 8 }} />
+              </div>
+
+              {/* ── FOOTER — pinned, never scrolls, never shrinks ──── */}
+              <div style={{
+                flexShrink: 0,                    // never compress
+                padding: '12px 20px',
+                borderTop: '1px solid var(--border)',
+                background: 'var(--surface)',
+                display: 'flex', alignItems: 'center', gap: 8,
+              }}>
+                <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} style={{ display: 'none' }} />
                 <button
-                  onClick={handleClose}
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
                   disabled={uploading}
                   style={{
                     background: 'none', border: 'none',
                     cursor: uploading ? 'not-allowed' : 'pointer',
-                    color: 'var(--text-muted)', padding: 6, borderRadius: 7,
-                    display: 'flex', opacity: uploading ? 0.4 : 1,
-                    transition: 'background 150ms',
+                    color: imageFile ? 'var(--accent)' : 'var(--text-muted)',
+                    padding: 8, borderRadius: 8, display: 'flex',
+                    opacity: uploading ? 0.4 : 1,
+                    transition: 'background 150ms, color 150ms',
                   }}
-                  onMouseEnter={e => { if (!uploading) e.currentTarget.style.background = 'var(--surface-raised)' }}
-                  onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                  onMouseEnter={e => { if (!uploading && !imageFile) { e.currentTarget.style.background = 'var(--surface-raised)'; e.currentTarget.style.color = 'var(--accent)' }}}
+                  onMouseLeave={e => { if (!imageFile) { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-muted)' }}}
+                  title="Attach image (max 5MB)"
                 >
-                  <X size={18} />
+                  <Image size={17} />
                 </button>
-              </div>
 
-              {/* Type selector */}
-              <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-                {TYPE_OPTIONS.map(type => {
-                  const Icon   = type.icon
-                  const active = postType === type.id
-                  return (
-                    <button
-                      key={type.id}
-                      onClick={() => setPostType(type.id)}
-                      style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 5,
-                        padding: '5px 10px',
-                        background: active ? `${type.color}18` : 'var(--surface-raised)',
-                        border: `1px solid ${active ? type.color + '50' : 'var(--border)'}`,
-                        borderRadius: 9999,
-                        color: active ? type.color : 'var(--text-secondary)',
-                        fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700,
-                        letterSpacing: '0.05em', cursor: 'pointer', transition: 'all 150ms',
-                      }}
-                    >
-                      <Icon size={11} />
-                      {type.label}
-                    </button>
-                  )
-                })}
-              </div>
-
-              {/* User chip */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                <div style={{
-                  width: 32, height: 32, borderRadius: 9,
-                  background: displayAvatar ? 'transparent' : 'var(--primary)',
-                  overflow: 'hidden', flexShrink: 0,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  border: '1px solid var(--border)',
+                <span style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 11, marginLeft: 'auto',
+                  color: charsLeft < 50 ? (charsLeft < 20 ? 'var(--danger)' : 'var(--primary)') : 'var(--text-muted)',
                 }}>
-                  {displayAvatar
-                    ? <img src={displayAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : <span style={{ fontFamily: 'var(--font-heading)', fontSize: 11, fontWeight: 700, color: '#0B0B0E' }}>{displayInitials}</span>
-                  }
-                </div>
-                <span style={{ fontFamily: 'var(--font-heading)', fontSize: 13, color: 'var(--text-secondary)' }}>
-                  @{displayUsername}
+                  {charsLeft}
                 </span>
+
+                <motion.button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={!canPost}
+                  whileHover={{ scale: canPost ? 1.02 : 1 }}
+                  whileTap={{ scale: canPost ? 0.97 : 1 }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 7,
+                    padding: '9px 18px',
+                    background: canPost ? 'var(--primary)' : 'var(--surface-raised)',
+                    border: `1px solid ${canPost ? 'var(--primary)' : 'var(--border)'}`,
+                    borderRadius: 9999,
+                    color: canPost ? '#0B0B0E' : 'var(--text-muted)',
+                    fontFamily: 'var(--font-heading)', fontSize: 12, fontWeight: 700,
+                    letterSpacing: '0.04em',
+                    cursor: canPost ? 'pointer' : 'not-allowed',
+                    transition: 'all 200ms', minWidth: 88,
+                    justifyContent: 'center',
+                  }}
+                >
+                  {uploading
+                    ? <><Loader2 size={13} style={{ animation: 'spin 0.7s linear infinite' }} /> Posting...</>
+                    : <><Send size={13} /> Post</>
+                  }
+                </motion.button>
               </div>
-
-              {/* Textarea */}
-              <textarea
-                value={content}
-                onChange={e => setContent(e.target.value.slice(0, MAX_CHARS))}
-                placeholder="What are you crafting today?"
-                autoFocus
-                rows={4}
-                disabled={uploading}
-                style={{
-                  width: '100%', padding: '10px 0',
-                  background: 'transparent', border: 'none',
-                  borderBottom: '1px solid var(--border)',
-                  color: 'var(--text-primary)',
-                  fontFamily: 'var(--font-body)', fontSize: 15,
-                  lineHeight: 1.6, resize: 'none', outline: 'none',
-                  boxSizing: 'border-box', marginBottom: 12,
-                  opacity: uploading ? 0.6 : 1,
-                }}
-              />
-
-              {/* Image preview */}
-              {imagePreview && (
-                <div style={{ position: 'relative', marginBottom: 12 }}>
-                  <img
-                    src={imagePreview}
-                    alt="Preview"
-                    style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 10 }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => { setImageFile(null); setImagePreview(null) }}
-                    disabled={uploading}
-                    style={{
-                      position: 'absolute', top: 8, right: 8,
-                      background: 'rgba(0,0,0,0.65)', border: 'none',
-                      borderRadius: '50%', width: 26, height: 26,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      cursor: uploading ? 'not-allowed' : 'pointer', color: '#fff',
-                    }}
-                  >
-                    <X size={13} />
-                  </button>
-                </div>
-              )}
-
-              {/* Error */}
-              {error && (
-                <div style={{
-                  fontFamily: 'var(--font-body)', fontSize: 13, color: '#FCA5A5',
-                  marginBottom: 12, padding: '8px 12px',
-                  background: 'rgba(239,68,68,0.1)',
-                  border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8,
-                }}>
-                  {error}
-                </div>
-              )}
-
-              {/* Bottom padding so content doesn't hide behind footer */}
-              <div style={{ height: 8 }} />
-            </div>
-
-            {/* Footer — PINNED, never scrolls, flexShrink:0 prevents compression */}
-            <div style={{
-              flexShrink: 0,              // never compress — always visible
-              padding: '12px 20px',
-              borderTop: '1px solid var(--border)',
-              background: 'var(--surface)',
-              display: 'flex', alignItems: 'center', gap: 8,
-            }}>
-              {/* Image attach */}
-              <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} style={{ display: 'none' }} />
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                disabled={uploading}
-                style={{
-                  background: 'none', border: 'none',
-                  cursor: uploading ? 'not-allowed' : 'pointer',
-                  color: imageFile ? 'var(--accent)' : 'var(--text-muted)',
-                  padding: 8, borderRadius: 8, display: 'flex',
-                  transition: 'background 150ms, color 150ms',
-                  opacity: uploading ? 0.4 : 1,
-                }}
-                onMouseEnter={e => { if (!uploading && !imageFile) { e.currentTarget.style.background = 'var(--surface-raised)'; e.currentTarget.style.color = 'var(--accent)' }}}
-                onMouseLeave={e => { if (!imageFile) { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-muted)' }}}
-                title="Attach image (max 5MB)"
-              >
-                <Image size={17} />
-              </button>
-
-              {/* Char counter */}
-              <span style={{
-                fontFamily: 'var(--font-mono)', fontSize: 11, marginLeft: 'auto',
-                color: charsLeft < 50 ? (charsLeft < 20 ? 'var(--danger)' : 'var(--primary)') : 'var(--text-muted)',
-              }}>
-                {charsLeft}
-              </span>
-
-              {/* Post button */}
-              <motion.button
-                type="button"
-                onClick={handleSubmit}
-                disabled={!canPost}
-                whileHover={{ scale: canPost ? 1.02 : 1 }}
-                whileTap={{ scale: canPost ? 0.97 : 1 }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 7,
-                  padding: '9px 18px',
-                  background: canPost ? 'var(--primary)' : 'var(--surface-raised)',
-                  border: `1px solid ${canPost ? 'var(--primary)' : 'var(--border)'}`,
-                  borderRadius: 9999,
-                  color: canPost ? '#0B0B0E' : 'var(--text-muted)',
-                  fontFamily: 'var(--font-heading)', fontSize: 12, fontWeight: 700,
-                  letterSpacing: '0.04em',
-                  cursor: canPost ? 'pointer' : 'not-allowed',
-                  transition: 'all 200ms', minWidth: 88,
-                  justifyContent: 'center',
-                }}
-              >
-                {uploading
-                  ? <><Loader2 size={13} style={{ animation: 'spin 0.7s linear infinite' }} /> Posting...</>
-                  : <><Send size={13} /> Post</>
-                }
-              </motion.button>
-            </div>
+            </motion.div>
           </motion.div>
         </>
       )}
