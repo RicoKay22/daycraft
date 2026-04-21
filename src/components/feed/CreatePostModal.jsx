@@ -1,6 +1,6 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Image, Code2, Dumbbell, BookOpen, Flame, Zap, Send, Loader2 } from 'lucide-react'
+import { X, Image, Code2, Dumbbell, BookOpen, Flame, Zap, Send, Loader2, AlertCircle } from 'lucide-react'
 import { useDispatch } from 'react-redux'
 import { useAuth } from '../../context/AuthContext'
 import { createPost } from '../../store/postsSlice'
@@ -14,19 +14,42 @@ const TYPE_OPTIONS = [
   { id: 'log',     label: 'Log',     icon: Zap,      color: '#A3E635' },
 ]
 
-const MAX_CHARS = 500
+const MAX_CHARS  = 500
+const DRAFT_KEY  = 'dc_post_draft'
+const TIMEOUT_MS = 12000   // 12 seconds before we give up
+
+// ─── Promise with timeout ─────────────────────────────────────────────────────
+function withTimeout(promise, ms, label = 'Request') {
+  const timer = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error(`${label} timed out. Check your connection and try again.`)), ms)
+  )
+  return Promise.race([promise, timer])
+}
 
 export default function CreatePostModal({ isOpen, onClose }) {
   const { user, profile } = useAuth()
   const dispatch           = useDispatch()
 
-  const [content,      setContent]      = useState('')
-  const [postType,     setPostType]     = useState('dev')
+  // ── Draft state — restored from localStorage on mount ────────────────────
+  const [content,      setContent]      = useState(() => {
+    try { return JSON.parse(localStorage.getItem(DRAFT_KEY))?.content || '' } catch { return '' }
+  })
+  const [postType,     setPostType]     = useState(() => {
+    try { return JSON.parse(localStorage.getItem(DRAFT_KEY))?.postType || 'dev' } catch { return 'dev' }
+  })
   const [imageFile,    setImageFile]    = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
   const [uploading,    setUploading]    = useState(false)
   const [error,        setError]        = useState('')
+  const [timedOut,     setTimedOut]     = useState(false)
   const fileRef = useRef(null)
+
+  // ── Persist draft to localStorage whenever content/type changes ───────────
+  useEffect(() => {
+    if (content || postType !== 'dev') {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ content, postType }))
+    }
+  }, [content, postType])
 
   const charsLeft = MAX_CHARS - content.length
   const canPost   = content.trim().length > 0 && !uploading
@@ -36,15 +59,24 @@ export default function CreatePostModal({ isOpen, onClose }) {
   const displayAvatar   = profile?.avatar_url || null
   const displayInitials = displayUsername.slice(0, 2).toUpperCase()
 
+  function clearDraft() {
+    localStorage.removeItem(DRAFT_KEY)
+  }
+
   function resetAndClose() {
+    clearDraft()
     setContent(''); setImageFile(null); setImagePreview(null)
-    setError(''); setPostType('dev'); setUploading(false)
+    setError(''); setPostType('dev'); setUploading(false); setTimedOut(false)
     onClose()
   }
 
   function handleClose() {
     if (uploading) return
-    resetAndClose()
+    // Don't clear draft on close — user might have lost focus by accident
+    // Draft is only cleared on successful post
+    setImageFile(null); setImagePreview(null)
+    setError(''); setUploading(false); setTimedOut(false)
+    onClose()
   }
 
   function handleImage(e) {
@@ -58,40 +90,62 @@ export default function CreatePostModal({ isOpen, onClose }) {
 
   async function handleSubmit() {
     if (!canPost || !user) return
-    setUploading(true); setError('')
+    setUploading(true); setError(''); setTimedOut(false)
 
     try {
       let imageUrl = null
 
+      // ── Image upload with timeout ───────────────────────────────────────
       if (imageFile) {
         const ext  = imageFile.name.split('.').pop().toLowerCase()
         const path = `${user.id}/${Date.now()}.${ext}`
-        const { error: uploadErr } = await supabase.storage
+
+        const uploadPromise = supabase.storage
           .from('daycraft-media')
           .upload(path, imageFile, { cacheControl: '3600', upsert: false })
+
+        const { error: uploadErr } = await withTimeout(uploadPromise, TIMEOUT_MS, 'Image upload')
         if (uploadErr) throw new Error(`Image upload failed: ${uploadErr.message}`)
+
         const { data: urlData } = supabase.storage.from('daycraft-media').getPublicUrl(path)
         imageUrl = urlData.publicUrl
       }
 
+      // ── Post insert with timeout ────────────────────────────────────────
       const typePrefix   = `[${postType.toUpperCase()}] `
       const finalContent = content.startsWith('[') ? content : typePrefix + content
 
-      const result = await dispatch(createPost({
+      const postPromise = dispatch(createPost({
         userId:   user.id,
         content:  finalContent,
         imageUrl,
-        author: { id: user.id, username: displayUsername, full_name: displayName, avatar_url: displayAvatar || '' },
+        author: {
+          id:         user.id,
+          username:   displayUsername,
+          full_name:  displayName,
+          avatar_url: displayAvatar || '',
+        },
       }))
+
+      const result = await withTimeout(postPromise, TIMEOUT_MS, 'Post creation')
 
       if (createPost.rejected.match(result)) {
         throw new Error(result.payload || 'Failed to create post')
       }
 
+      // ── Success ──────────────────────────────────────────────────────────
+      clearDraft()
       resetAndClose()
+
     } catch (err) {
       console.error('Post error:', err)
-      setError(err.message || 'Failed to create post. Please try again.')
+      const isTimeout = err.message?.includes('timed out')
+      setTimedOut(isTimeout)
+      setError(
+        isTimeout
+          ? 'Connection timed out. Your draft is saved — please try again.'
+          : err.message || 'Failed to create post. Please try again.'
+      )
       setUploading(false)
     }
   }
@@ -102,9 +156,7 @@ export default function CreatePostModal({ isOpen, onClose }) {
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* 
-            BACKDROP — fills entire screen, click to close
-          */}
+          {/* Backdrop — flex container for responsive centering */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -116,18 +168,13 @@ export default function CreatePostModal({ isOpen, onClose }) {
               backdropFilter: 'blur(4px)',
               WebkitBackdropFilter: 'blur(4px)',
               zIndex: 200,
-              // Flex container — modal centres itself inside this
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: '16px',        // breathing room on all sides
+              padding: '16px',
             }}
           >
-            {/*
-              MODAL — stop backdrop click from propagating
-              Uses 100% width with max-width + 100dvh with padding
-              so it ALWAYS fits whatever the viewport is
-            */}
+            {/* Modal */}
             <motion.div
               initial={{ opacity: 0, y: 24, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -137,7 +184,6 @@ export default function CreatePostModal({ isOpen, onClose }) {
               style={{
                 width: '100%',
                 maxWidth: 520,
-                // maxHeight fills remaining space after the 16px padding on each side
                 maxHeight: 'calc(100dvh - 32px)',
                 background: 'var(--surface)',
                 border: '1px solid var(--border)',
@@ -148,17 +194,18 @@ export default function CreatePostModal({ isOpen, onClose }) {
                 overflow: 'hidden',
               }}
             >
-              {/* ── Scrollable content ─────────────────────────────── */}
-              <div style={{
-                flex: '1 1 auto',
-                minHeight: 0,          // critical: enables flex child to scroll
-                overflowY: 'auto',
-                padding: '20px 20px 0',
-              }}>
+              {/* Scrollable content */}
+              <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', padding: '20px 20px 0' }}>
+
                 {/* Header */}
                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
                   <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: 16, color: 'var(--text-primary)', margin: 0, flex: 1 }}>
                     New post
+                    {content.length > 0 && !uploading && (
+                      <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--accent)', marginLeft: 8, fontWeight: 400 }}>
+                        · Draft saved
+                      </span>
+                    )}
                   </h3>
                   <button
                     onClick={handleClose}
@@ -168,7 +215,6 @@ export default function CreatePostModal({ isOpen, onClose }) {
                       cursor: uploading ? 'not-allowed' : 'pointer',
                       color: 'var(--text-muted)', padding: 6, borderRadius: 7,
                       display: 'flex', opacity: uploading ? 0.4 : 1,
-                      transition: 'background 150ms',
                     }}
                     onMouseEnter={e => { if (!uploading) e.currentTarget.style.background = 'var(--surface-raised)' }}
                     onMouseLeave={e => e.currentTarget.style.background = 'none'}
@@ -243,7 +289,7 @@ export default function CreatePostModal({ isOpen, onClose }) {
                   }}
                 />
 
-                {/* Image preview — max 180px to leave room for footer */}
+                {/* Image preview */}
                 {imagePreview && (
                   <div style={{ position: 'relative', marginBottom: 12 }}>
                     <img
@@ -268,25 +314,28 @@ export default function CreatePostModal({ isOpen, onClose }) {
                   </div>
                 )}
 
-                {/* Error */}
+                {/* Error / timeout message */}
                 {error && (
                   <div style={{
-                    fontFamily: 'var(--font-body)', fontSize: 13, color: '#FCA5A5',
-                    marginBottom: 12, padding: '8px 12px',
-                    background: 'rgba(239,68,68,0.1)',
-                    border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8,
+                    display: 'flex', alignItems: 'flex-start', gap: 8,
+                    fontFamily: 'var(--font-body)', fontSize: 13,
+                    color: timedOut ? '#FCD34D' : '#FCA5A5',
+                    marginBottom: 12, padding: '10px 12px',
+                    background: timedOut ? 'rgba(252,211,77,0.08)' : 'rgba(239,68,68,0.1)',
+                    border: `1px solid ${timedOut ? 'rgba(252,211,77,0.25)' : 'rgba(239,68,68,0.2)'}`,
+                    borderRadius: 8,
                   }}>
-                    {error}
+                    <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+                    <span>{error}</span>
                   </div>
                 )}
 
-                {/* Spacer so content isn't hidden under footer */}
                 <div style={{ height: 8 }} />
               </div>
 
-              {/* ── FOOTER — pinned, never scrolls, never shrinks ──── */}
+              {/* Footer — always visible, never compressed */}
               <div style={{
-                flexShrink: 0,                    // never compress
+                flexShrink: 0,
                 padding: '12px 20px',
                 borderTop: '1px solid var(--border)',
                 background: 'var(--surface)',
@@ -297,17 +346,16 @@ export default function CreatePostModal({ isOpen, onClose }) {
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   disabled={uploading}
+                  title="Attach image (max 5MB)"
                   style={{
                     background: 'none', border: 'none',
                     cursor: uploading ? 'not-allowed' : 'pointer',
                     color: imageFile ? 'var(--accent)' : 'var(--text-muted)',
                     padding: 8, borderRadius: 8, display: 'flex',
                     opacity: uploading ? 0.4 : 1,
-                    transition: 'background 150ms, color 150ms',
                   }}
                   onMouseEnter={e => { if (!uploading && !imageFile) { e.currentTarget.style.background = 'var(--surface-raised)'; e.currentTarget.style.color = 'var(--accent)' }}}
                   onMouseLeave={e => { if (!imageFile) { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-muted)' }}}
-                  title="Attach image (max 5MB)"
                 >
                   <Image size={17} />
                 </button>
@@ -341,6 +389,8 @@ export default function CreatePostModal({ isOpen, onClose }) {
                 >
                   {uploading
                     ? <><Loader2 size={13} style={{ animation: 'spin 0.7s linear infinite' }} /> Posting...</>
+                    : timedOut
+                    ? <><Send size={13} /> Retry</>
                     : <><Send size={13} /> Post</>
                   }
                 </motion.button>
