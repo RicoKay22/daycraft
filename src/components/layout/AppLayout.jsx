@@ -1,4 +1,8 @@
 import { useState, useEffect } from 'react'
+import { useDispatch } from 'react-redux'
+import { useAuth } from '../../context/AuthContext'
+import { notificationsActions } from '../../store/notificationsSlice'
+import { supabase } from '../../lib/supabase'
 import TopBar from './TopBar'
 import Sidebar from './Sidebar'
 import BottomNav from './BottomNav'
@@ -7,16 +11,43 @@ import CreatePostModal from '../feed/CreatePostModal'
 const DRAFT_KEY = 'dc_post_draft'
 
 export default function AppLayout({ children }) {
+  const dispatch = useDispatch()
+  const { user } = useAuth()
+
   const [createPostOpen, setCreatePostOpen] = useState(() => {
-    // Auto-open modal on mount if an unsent draft exists
-    // This means after a refresh, the modal reopens with the draft intact
     try {
       const draft = JSON.parse(localStorage.getItem(DRAFT_KEY))
       return !!(draft?.content?.trim())
-    } catch {
-      return false
-    }
+    } catch { return false }
   })
+
+  // ── Realtime notification subscription ──────────────────────────────────
+  useEffect(() => {
+    if (!user?.id) return
+
+    const channel = supabase
+      .channel(`notif-badge:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event:  'INSERT',
+          schema: 'public',
+          table:  'notifications',
+          filter: `recipient_id=eq.${user.id}`,
+        },
+        async (payload) => {
+          const { data } = await supabase
+            .from('notifications')
+            .select('*, actor:profiles!notifications_actor_id_fkey(id, username, full_name, avatar_url)')
+            .eq('id', payload.new.id)
+            .single()
+          if (data) dispatch(notificationsActions.addNotification(data))
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [user?.id, dispatch])
 
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
