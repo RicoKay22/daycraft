@@ -4,24 +4,25 @@ import { supabase } from '../lib/supabase'
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser]       = useState(null)
+  const [user,    setUser]    = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
-  const isProcessingAuth      = useRef(false)
+  const isProcessingAuth = useRef(false)
 
-  // ─── fetchProfile ─────────────────────────────────────────────────────────
   const fetchProfile = async (userId) => {
-    const { data, error } = await supabase
-      .from('profiles').select('*').eq('id', userId).single()
-    if (!error && data) setProfile(data)
-    return data
+    try {
+      const { data, error } = await supabase
+        .from('profiles').select('*').eq('id', userId).single()
+      if (!error && data) setProfile(data)
+      return data
+    } catch (err) {
+      console.error('fetchProfile error:', err)
+    }
   }
 
-  // ─── ensureProfile — never overwrites existing username (Section 6 rule 8) ─
   const ensureProfile = async (userId, meta = {}) => {
     const { data: existing } = await supabase
       .from('profiles').select('id, username').eq('id', userId).single()
-
     if (existing) {
       const updates = {}
       if (meta.email && !existing.email) updates.email = meta.email
@@ -30,111 +31,119 @@ export function AuthProvider({ children }) {
       }
       return existing
     }
-
     const username = meta.username ||
       meta.email?.split('@')[0]?.replace(/[^a-z0-9_]/gi, '_').toLowerCase() ||
       `user_${userId.slice(0, 8)}`
-
     const { data: newProfile, error } = await supabase
       .from('profiles')
       .insert({ id: userId, username, full_name: meta.full_name || '', avatar_url: meta.avatar_url || '' })
       .select().single()
-
     if (error && error.code !== '23505') console.error('ensureProfile error:', error)
     return newProfile
   }
 
-  // ─── signIn — immediately sets user (Section 6 rule 2) ────────────────────
   async function signIn(email, password) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
-    if (data?.user) {
-      setUser(data.user)
-      fetchProfile(data.user.id)
-    }
+    if (data?.user) { setUser(data.user); fetchProfile(data.user.id) }
     return data
   }
 
-  // ─── signUp — emailRedirectTo returns to /auth?confirmed=true ─────────────
   async function signUp(email, password, username) {
     const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
+      email, password,
       options: {
         data: { username, full_name: username },
         emailRedirectTo: `${window.location.origin}/auth?confirmed=true`,
       },
     })
     if (error) throw error
-    // Only create profile for genuinely new users (duplicate = identities: [])
     if (data?.user && data.user.identities?.length > 0) {
       await ensureProfile(data.user.id, { username, email })
     }
     return data
   }
 
-  // ─── signOut — instant UI reset (Section 6 rule 3) ────────────────────────
   async function signOut() {
-    setUser(null)
-    setProfile(null)
+    setUser(null); setProfile(null)
     supabase.auth.signOut().catch(() => {})
   }
 
-  // ─── Single onAuthStateChange listener (Section 6 rule 1) ─────────────────
+  // Expose a way to refresh profile after edits
+  async function refreshProfile(userId) {
+    const id = userId || user?.id
+    if (!id) return
+    const { data } = await supabase.from('profiles').select('*').eq('id', id).single()
+    if (data) setProfile(data)
+    return data
+  }
+
   useEffect(() => {
-    // Section 6 rule 4 — recovery page isolation
     const isRecoveryFlow =
       window.location.pathname === '/update-password' ||
       window.location.hash.includes('type=recovery')
 
-    if (isRecoveryFlow) {
-      setLoading(false)
-      return
+    if (isRecoveryFlow) { setLoading(false); return }
+
+    let isMounted = true
+
+    // ── Restore session safely — loading ALWAYS ends ──────────────────────
+    const init = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!isMounted) return
+        if (session?.user) {
+          setUser(session.user)
+          // Don't block loading on profile fetch
+          fetchProfile(session.user.id)
+            .catch(() => {})
+            .finally(() => { if (isMounted) setLoading(false) })
+        } else {
+          setLoading(false)
+        }
+      } catch (err) {
+        console.error('Session restore error:', err)
+        if (isMounted) setLoading(false)
+      }
     }
 
-    // Keep loading:true until BOTH user and profile are set
-    // This prevents AuthGuard from redirecting before session is restored
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser(session.user)
-        fetchProfile(session.user.id).finally(() => setLoading(false))
-      } else {
-        setLoading(false)
-      }
-    })
+    init()
 
-    // ONE listener only (Section 6 rule 1)
+    // ── Auth listener — NON-BLOCKING, loading always ends ─────────────────
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (isProcessingAuth.current) return
-        isProcessingAuth.current = true
-        try {
-          if (event === 'SIGNED_IN' && session?.user) {
-            setUser(session.user)
-            await ensureProfile(session.user.id, {
-              email: session.user.email,
-              full_name: session.user.user_metadata?.full_name,
-              avatar_url: session.user.user_metadata?.avatar_url,
-              username: session.user.user_metadata?.username,
-            })
-            fetchProfile(session.user.id)
-          }
-          if (event === 'SIGNED_OUT') { setUser(null); setProfile(null) }
-          if (event === 'TOKEN_REFRESHED' && session?.user) setUser(session.user)
-        } finally {
-          isProcessingAuth.current = false
+        if (!isMounted) return
+
+        if (event === 'SIGNED_IN' && session?.user) {
+          setUser(session.user)
+          // Fire and forget — don't await
+          ensureProfile(session.user.id, {
+            email:      session.user.email,
+            full_name:  session.user.user_metadata?.full_name,
+            avatar_url: session.user.user_metadata?.avatar_url,
+            username:   session.user.user_metadata?.username,
+          }).catch(() => {})
+          fetchProfile(session.user.id).catch(() => {})
         }
+        if (event === 'SIGNED_OUT') { setUser(null); setProfile(null) }
+        if (event === 'TOKEN_REFRESHED' && session?.user) setUser(session.user)
+
+        // Guarantee loading ends no matter what
+        if (isMounted) setLoading(false)
       }
     )
 
-    return () => subscription.unsubscribe()
+    return () => {
+      isMounted = false
+      subscription.unsubscribe()
+    }
   }, [])
 
   return (
     <AuthContext.Provider value={{
       user, profile, loading,
       signIn, signUp, signOut,
-      fetchProfile, ensureProfile,
+      fetchProfile, ensureProfile, refreshProfile,
       isAuthenticated: !!user,
     }}>
       {children}
