@@ -54,16 +54,16 @@ export default function AppLayout({ children }) {
     <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
 
       {/*
-        Base ambient background — applies to ALL pages.
-        Very subtle neutral-warm tone (opacity kept low so it doesn't
-        clash with page-specific colors: Feed adds its own green on top,
-        Profile adds its own amber on top).
+        Base ambient background — renders on ALL protected pages automatically.
+        Dark warm neutral matches the 21st.dev shadow/silk aesthetic on near-black.
+        Feed and Profile pages stack their own EtherealBackground on top of this
+        to apply their specific palette (green / amber).
       */}
       <EtherealBackground
-        color="rgba(163, 230, 53, 0.05)"
-        animationScale={50}
-        animationSpeed={55}
-        opacity={0.9}
+        color="rgba(55, 50, 45, 0.75)"
+        animationScale={55}
+        animationSpeed={60}
+        opacity={1}
       />
 
       <TopBar onCreatePost={() => setCreatePostOpen(true)} />

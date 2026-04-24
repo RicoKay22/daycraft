@@ -2,10 +2,20 @@ import { useRef, useId, useEffect } from 'react'
 import { animate, useMotionValue } from 'framer-motion'
 
 /**
- * EtherealBackground — adapted from 21st.dev ethereal-shadow component
- * Pure CSS version — zero external URLs, zero CORS issues
- * Organic blob shape built from overlapping radial gradients
- * Displacement animation via SVG feTurbulence (fully inline)
+ * EtherealBackground — matches 21st.dev ethereal-shadow visual effect
+ *
+ * The 21st.dev original uses a solid-colored organic blob masked from an
+ * external PNG + SVG displacement animation + heavy grain texture.
+ *
+ * This version reproduces all three with zero external URLs:
+ *   - Organic blobs via CSS border-radius (solid, NOT gradient)
+ *   - Same SVG feTurbulence displacement + hue-rotate animation
+ *   - Inline SVG fractalNoise grain at visible opacity (0.10)
+ *
+ * Color guide for Daycraft pages:
+ *   AppLayout base  → "rgba(55,50,45,0.75)"    dark warm neutral (all pages)
+ *   FeedPage        → "rgba(34,197,94,0.38)"    Forest Minimal green
+ *   ProfilePage     → "rgba(245,158,11,0.38)"   Creator Gold amber
  */
 
 function mapRange(value, fromLow, fromHigh, toLow, toHigh) {
@@ -15,8 +25,7 @@ function mapRange(value, fromLow, fromHigh, toLow, toHigh) {
 }
 
 export default function EtherealBackground({
-  // Pass ANY rgba color — controls the glow hue for that page
-  color = 'rgba(34, 197, 94, 0.18)',   // Forest Minimal green (Feed default)
+  color = 'rgba(55, 50, 45, 0.75)',
   animationScale = 60,
   animationSpeed = 70,
   opacity = 1,
@@ -49,9 +58,7 @@ export default function EtherealBackground({
       },
     })
 
-    return () => {
-      if (animCtrl.current) animCtrl.current.stop()
-    }
+    return () => { if (animCtrl.current) animCtrl.current.stop() }
   }, [animationScale, animationSpeed]) // eslint-disable-line
 
   return (
@@ -67,7 +74,7 @@ export default function EtherealBackground({
         ...style,
       }}
     >
-      {/* Inline SVG filter — no external fetch, fully self-contained */}
+      {/* Inline SVG filter — zero external fetch */}
       <svg
         style={{ position: 'absolute', width: 0, height: 0 }}
         xmlns="http://www.w3.org/2000/svg"
@@ -116,46 +123,69 @@ export default function EtherealBackground({
         </defs>
       </svg>
 
-      {/* 
-        Organic blob built from 3 overlapping radial gradients.
-        No mask PNG needed — the displacement filter distorts these
-        into the same organic animated shape the 21st.dev original produces.
-        inset: -displacementScale prevents filter clipping at edges.
+      {/*
+        Three organic blob shapes using CSS border-radius.
+        SOLID backgroundColor (not gradient) so displacement filter
+        distorts their edges into the flowing silk/shadow shapes
+        seen in the 21st.dev preview. Positioned across the full
+        viewport so the entire page has depth and movement.
       */}
       <div
         style={{
           position: 'absolute',
           inset: -displacementScale,
-          filter: `url(#${filterId}) blur(8px)`,
+          filter: `url(#${filterId}) blur(6px)`,
         }}
       >
-        <div
-          style={{
-            width: '100%',
-            height: '100%',
-            background: [
-              `radial-gradient(ellipse 65% 55% at 28% 38%, ${color}, transparent 70%)`,
-              `radial-gradient(ellipse 55% 65% at 72% 62%, ${color}, transparent 70%)`,
-              `radial-gradient(ellipse 45% 45% at 52% 18%, ${color}, transparent 65%)`,
-              `radial-gradient(ellipse 40% 50% at 15% 72%, ${color}, transparent 65%)`,
-            ].join(', '),
-          }}
-        />
+        {/* Top-left blob */}
+        <div style={{
+          position: 'absolute',
+          width: '65%',
+          height: '60%',
+          top: '5%',
+          left: '-5%',
+          borderRadius: '30% 70% 70% 30% / 30% 30% 70% 70%',
+          backgroundColor: color,
+        }} />
+
+        {/* Centre-right blob */}
+        <div style={{
+          position: 'absolute',
+          width: '60%',
+          height: '65%',
+          top: '25%',
+          right: '-5%',
+          borderRadius: '70% 30% 30% 70% / 70% 70% 30% 30%',
+          backgroundColor: color,
+          opacity: 0.85,
+        }} />
+
+        {/* Bottom-centre blob */}
+        <div style={{
+          position: 'absolute',
+          width: '55%',
+          height: '50%',
+          bottom: '0%',
+          left: '22%',
+          borderRadius: '50% 50% 30% 70% / 40% 60% 40% 60%',
+          backgroundColor: color,
+          opacity: 0.7,
+        }} />
       </div>
 
-      {/* 
-        Inline noise texture — pure SVG data URI, zero external fetch.
-        Adds subtle grain that makes the background feel analog/organic.
-        opacity: 0.035 = almost invisible but adds tactile depth.
+      {/*
+        Grain noise — inline SVG data URI, zero external fetch.
+        0.10 opacity matches the heavy visible grain in the 21st.dev preview.
+        This is what gives the effect its analog fabric/silk texture.
       */}
       <div
         style={{
           position: 'absolute',
           inset: 0,
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E")`,
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.45'/%3E%3C/svg%3E")`,
           backgroundSize: '200px',
           backgroundRepeat: 'repeat',
-          opacity: 0.035,
+          opacity: 0.10,
         }}
       />
     </div>
