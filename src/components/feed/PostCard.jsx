@@ -20,13 +20,27 @@ const POST_TYPES = {
 }
 
 function detectType(content = '') {
-  const lower = content.toLowerCase()
-  if (/\b(code|build|ship|deploy|pr|push|commit|bug|fix|feature|api|react|js|python)\b/.test(lower)) return 'dev'
-  if (/\b(workout|gym|run|lift|reps|sets|push.?up|squat|cardio|fitness|km|miles)\b/.test(lower)) return 'workout'
-  if (/\b(read|book|chapter|page|finished|author|novel|non.?fiction)\b/.test(lower)) return 'read'
-  if (/\b(build|project|idea|launched|shipped|mvp|side.?project)\b/.test(lower)) return 'build'
-  if (/\b(log|day|streak|habit|routine|daily|week)\b/.test(lower)) return 'log'
+  // Check explicit [TYPE] prefix first (set by CreatePostModal)
+  const explicit = content.match(/^\[(DEV|WORKOUT|BUILD|READ|LOG)\]/i)
+  if (explicit) {
+    const t = explicit[1].toLowerCase()
+    const map = { dev: 'dev', workout: 'workout', build: 'build', read: 'read', log: 'log' }
+    return map[t] || 'other'
+  }
+  // Strip prefix before keyword matching to avoid [DEV] matching 'dev' keyword
+  const stripped = content.replace(/^\[\w+\]\s*/, '')
+  const lower = stripped.toLowerCase()
+  if (/\b(code|ship|deploy|commit|react|js|python|api)\b/.test(lower)) return 'dev'
+  if (/\b(workout|gym|run|lift|reps|fitness|km|miles)\b/.test(lower)) return 'workout'
+  if (/\b(read|book|chapter|finished|novel)\b/.test(lower)) return 'read'
+  if (/\b(build|launched|shipped|mvp|project)\b/.test(lower)) return 'build'
+  if (/\b(log|day|streak|habit|daily)\b/.test(lower)) return 'log'
   return 'other'
+}
+
+// Strip the [TYPE] prefix for display — users should only see their actual words
+function stripTypePrefix(text = '') {
+  return text.replace(/^\[\w+\]\s*/, '').trim()
 }
 
 export default function PostCard({ post, onComment }) {
@@ -215,7 +229,7 @@ export default function PostCard({ post, onComment }) {
           margin: '0 0 12px',
           whiteSpace: 'pre-wrap', wordBreak: 'break-word',
         }}>
-          {post.content}
+          {stripTypePrefix(post.content)}
         </p>
 
         {/* Post image */}

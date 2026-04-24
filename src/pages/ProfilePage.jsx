@@ -98,6 +98,7 @@ export default function ProfilePage() {
           followLoading={followLoading}
           onFollow={toggleFollow}
           onEdit={() => setEditOpen(true)}
+          onCoverUpdated={refreshProfile}
         />
       )}
 

@@ -5,6 +5,7 @@ import { ThemeProvider } from './context/ThemeContext'
 import { AuthProvider } from './context/AuthContext'
 import AuthGuard from './components/AuthGuard'
 import AppLayout from './components/layout/AppLayout'
+import ErrorBoundary from './components/ErrorBoundary'
 
 // Pages
 import AuthPage           from './pages/AuthPage'
@@ -17,12 +18,13 @@ import DashboardPage      from './pages/DashboardPage'
 import NotFoundPage       from './pages/NotFoundPage'
 import UpdatePasswordPage from './pages/UpdatePasswordPage'
 
-// Wrap a page in AuthGuard + AppLayout
 function ProtectedPage({ children }) {
   return (
     <AuthGuard>
       <AppLayout>
-        {children}
+        <ErrorBoundary>
+          {children}
+        </ErrorBoundary>
       </AppLayout>
     </AuthGuard>
   )
@@ -39,7 +41,7 @@ export default function App() {
               <Route path="/auth"            element={<AuthPage />} />
               <Route path="/update-password" element={<UpdatePasswordPage />} />
 
-              {/* Protected — all wrapped in AppLayout */}
+              {/* Protected */}
               <Route path="/" element={
                 <ProtectedPage><FeedPage /></ProtectedPage>
               } />
