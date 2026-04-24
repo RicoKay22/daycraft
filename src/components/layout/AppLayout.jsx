@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useDispatch } from 'react-redux'
 import { useAuth } from '../../context/AuthContext'
+import { useTheme } from '../../context/ThemeContext'
 import { notificationsActions } from '../../store/notificationsSlice'
 import { supabase } from '../../lib/supabase'
 import TopBar from './TopBar'
@@ -12,8 +13,9 @@ import EtherealBackground from '../ui/EtherealBackground'
 const DRAFT_KEY = 'dc_post_draft'
 
 export default function AppLayout({ children }) {
-  const dispatch = useDispatch()
-  const { user } = useAuth()
+  const dispatch    = useDispatch()
+  const { user }   = useAuth()
+  const { isDark } = useTheme()
 
   const [createPostOpen, setCreatePostOpen] = useState(() => {
     try {
@@ -50,17 +52,23 @@ export default function AppLayout({ children }) {
     return () => { supabase.removeChannel(channel) }
   }, [user?.id, dispatch])
 
+  /*
+    Theme-aware ethereal color:
+    Dark mode  → dark warm brown (rgba(55,50,45,0.75)) — creates the
+                 flowing dark silk/shadow shapes from the 21st.dev preview
+    Light mode → soft warm cream (rgba(210,190,150,0.30)) — stays light
+                 enough that white surface cards remain clearly readable
+                 and the effect reads as gentle warmth, not mud
+  */
+  const etherealColor = isDark
+    ? 'rgba(55, 50, 45, 0.75)'
+    : 'rgba(210, 190, 150, 0.30)'
+
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
 
-      {/*
-        Base ambient background — renders on ALL protected pages automatically.
-        Dark warm neutral matches the 21st.dev shadow/silk aesthetic on near-black.
-        Feed and Profile pages stack their own EtherealBackground on top of this
-        to apply their specific palette (green / amber).
-      */}
       <EtherealBackground
-        color="rgba(55, 50, 45, 0.75)"
+        color={etherealColor}
         animationScale={55}
         animationSpeed={60}
         opacity={1}

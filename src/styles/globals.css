@@ -15,10 +15,18 @@
 
   /* --- Colors: Dark Mode (default) --- */
   --color-bg:            #0B0B0E;
-  --color-surface:       #111116;
-  --color-surface-raised:#18181F;
-  --color-border:        #1F1F28;
-  --color-border-bright: #2E2E3A;
+
+  /*
+    Surface values bumped up significantly so cards read as clearly
+    distinct from the near-black background even with the ethereal
+    background shapes flowing behind them.
+    Old: #111116 / #18181F — too close to bg, shapes bled through.
+    New: #1C1C24 / #252532 — visible contrast at a glance.
+  */
+  --color-surface:       #1C1C24;
+  --color-surface-raised:#252532;
+  --color-border:        #2A2A38;
+  --color-border-bright: #363648;
 
   /* Primary: Amber — craft, fire, creation (from Palette B) */
   --color-primary:       #F59E0B;
@@ -172,14 +180,16 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .glass {
-  background: rgba(17, 17, 22, 0.72);
+  background: rgba(28, 28, 36, 0.88);
   backdrop-filter: blur(16px) saturate(1.4);
   -webkit-backdrop-filter: blur(16px) saturate(1.4);
   border: 1px solid var(--border);
 }
 
 [data-theme="light"] .glass {
-  background: rgba(247, 246, 242, 0.82);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
 }
 
 /* ============================================================
