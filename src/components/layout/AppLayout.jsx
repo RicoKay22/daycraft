@@ -7,6 +7,7 @@ import TopBar from './TopBar'
 import Sidebar from './Sidebar'
 import BottomNav from './BottomNav'
 import CreatePostModal from '../feed/CreatePostModal'
+import EtherealBackground from '../ui/EtherealBackground'
 
 const DRAFT_KEY = 'dc_post_draft'
 
@@ -51,6 +52,20 @@ export default function AppLayout({ children }) {
 
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
+
+      {/*
+        Base ambient background — applies to ALL pages.
+        Very subtle neutral-warm tone (opacity kept low so it doesn't
+        clash with page-specific colors: Feed adds its own green on top,
+        Profile adds its own amber on top).
+      */}
+      <EtherealBackground
+        color="rgba(163, 230, 53, 0.05)"
+        animationScale={50}
+        animationSpeed={55}
+        opacity={0.9}
+      />
+
       <TopBar onCreatePost={() => setCreatePostOpen(true)} />
 
       <div className="dc-sidebar-wrap">
