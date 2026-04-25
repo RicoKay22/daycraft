@@ -9,10 +9,18 @@ const feedSlice = createSlice({
     setFeedPage(state, action)    { state.page    = action.payload },
     setFeedHasMore(state, action) { state.hasMore  = action.payload },
     setFeedLoading(state, action) { state.loading  = action.payload },
-    resetFeed(state) { state.page = 0; state.hasMore = true; state.loading = false; state.error = null },
+    resetFeed(state) {
+      state.page    = 0
+      state.hasMore = true
+      state.loading = false
+      state.error   = null
+    },
   },
 })
 
+// ── Selectors ────────────────────────────────────────────────────────────────
+
+// Feed: posts from followed users + own posts, sorted by recency
 export const selectFeedPosts = createSelector(
   [selectAllPosts, selectFollowingIds, (_state, userId) => userId],
   (posts, followingIds, userId) =>
@@ -21,19 +29,27 @@ export const selectFeedPosts = createSelector(
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 )
 
+// Profile grid: posts by a specific user
 export const selectPostsByUserId = createSelector(
   [selectAllPosts, (_state, userId) => userId],
   (posts, userId) =>
-    posts.filter(post => post.user_id === userId)
-         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    posts
+      .filter(post => post.user_id === userId)
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 )
 
+/*
+  selectTrendingPosts — previously applied a client-side score sort.
+  Now that fetchExplorePosts calls the get_trending_posts RPC, the server
+  already returns posts in correct decay-score order. Re-sorting client-side
+  would corrupt that ordering. We now sort only by insertion order (IDs array
+  order from the adapter) which preserves the server's ranking.
+  Falling back to created_at sort as a safe default when RPC data isn't loaded.
+*/
 export const selectTrendingPosts = createSelector(
   [selectAllPosts],
-  (posts) => [...posts].sort((a, b) => {
-    const score = (p) => (p.like_count || 0) * 3 + (new Date(p.created_at).getTime() / 1e10)
-    return score(b) - score(a)
-  })
+  (posts) =>
+    [...posts].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 )
 
 export const selectLikedPosts = createSelector(

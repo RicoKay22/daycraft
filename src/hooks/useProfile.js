@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useAuth } from '../context/AuthContext'
 import {
@@ -9,16 +9,14 @@ import { fetchUserPosts } from '../store/postsSlice'
 import { selectPostsByUserId } from '../store/feedSlice'
 import { supabase } from '../lib/supabase'
 
+// Stable empty array — defined outside component so reference never changes.
+// Fixes Redux warning: "Selector returned a different result with same parameters"
+// which was caused by returning a new [] literal on every render when profileUser
+// was null.
+const EMPTY_POSTS = []
+
 /**
  * useProfile — loads a profile by username + their posts + posts they liked
- *
- * LIKED POSTS FIX:
- * Previously, "liked" tab filtered own posts by is_liked_by_me — so it only
- * showed posts by THIS user that the viewer happened to have liked.
- * It never fetched posts by other users that THIS profile owner liked.
- *
- * Fix: separate supabase query joins likes → posts → author for this user's
- * liked posts. Returns likedPosts separately from posts (own posts).
  */
 export function useProfile(username) {
   const dispatch    = useDispatch()
@@ -35,9 +33,16 @@ export function useProfile(username) {
   const followingIds = useSelector(selectFollowingIds)
   const isOwnProfile = profileUser?.id === user?.id
 
-  // Own posts for this profile from Redux store
-  const posts = useSelector(state =>
-    profileUser ? selectPostsByUserId(state, profileUser.id) : []
+  // Stable profileUserId — only changes when a different profile is loaded.
+  // Passed to the memoized selector so the cache key is stable.
+  const profileUserId = profileUser?.id ?? null
+
+  // Own posts — memoized selector, stable reference, no Redux warning
+  const posts = useSelector(
+    useCallback(
+      state => profileUserId ? selectPostsByUserId(state, profileUserId) : EMPTY_POSTS,
+      [profileUserId]
+    )
   )
 
   // ── Load profile by username ─────────────────────────────────────────────
@@ -59,18 +64,11 @@ export function useProfile(username) {
           return
         }
         setProfileUser(data)
-
-        // Fetch their own posts into Redux
         dispatch(fetchUserPosts({ userId: data.id, page: 0, limit: 24 }))
-
-        // Fetch posts this user has liked — from ALL users, not just own
         fetchLikedPosts(data.id)
-
-        // Check follow status
         if (user?.id && data.id !== user.id) {
           setIsFollowing(followingIds.includes(data.id))
         }
-
         setLoading(false)
       })
   }, [username, user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -97,7 +95,6 @@ export function useProfile(username) {
 
       if (err) throw err
 
-      // Flatten: extract the post object, mark as liked
       const shaped = (data || [])
         .filter(l => l.post)
         .map(l => ({ ...l.post, is_liked_by_me: true }))
@@ -121,7 +118,6 @@ export function useProfile(username) {
   const toggleFollow = useCallback(async () => {
     if (!user || !profileUser || isOwnProfile || followLoading) return
     setFollowLoading(true)
-
     const nowFollowing = !isFollowing
 
     setIsFollowing(nowFollowing)
