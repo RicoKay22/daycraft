@@ -54,11 +54,8 @@ export default function AppLayout({ children }) {
 
   /*
     Theme-aware ethereal color:
-    Dark mode  → dark warm brown (rgba(55,50,45,0.75)) — creates the
-                 flowing dark silk/shadow shapes from the 21st.dev preview
-    Light mode → soft warm cream (rgba(210,190,150,0.30)) — stays light
-                 enough that white surface cards remain clearly readable
-                 and the effect reads as gentle warmth, not mud
+    Dark mode  → dark warm brown — creates flowing dark silk shapes (21st.dev effect)
+    Light mode → soft warm cream — keeps white cards legible, adds gentle warmth
   */
   const etherealColor = isDark
     ? 'rgba(55, 50, 45, 0.75)'
@@ -67,6 +64,14 @@ export default function AppLayout({ children }) {
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
 
+      {/*
+        EtherealBackground is position:fixed with z-index:0.
+        In CSS, a positioned element with ANY z-index stacks above
+        unpositioned (static) elements — so without an explicit z-index
+        on the page content, the background shapes bleed through cards.
+        Fix: dc-content gets position:relative + z-index:1, which creates
+        a new stacking context above the background on every page.
+      */}
       <EtherealBackground
         color={etherealColor}
         animationScale={55}
@@ -74,19 +79,31 @@ export default function AppLayout({ children }) {
         opacity={1}
       />
 
-      <TopBar onCreatePost={() => setCreatePostOpen(true)} />
+      {/* TopBar must also be above the background */}
+      <div style={{ position: 'relative', zIndex: 10 }}>
+        <TopBar onCreatePost={() => setCreatePostOpen(true)} />
+      </div>
 
-      <div className="dc-sidebar-wrap">
+      <div className="dc-sidebar-wrap" style={{ position: 'relative', zIndex: 10 }}>
         <Sidebar onCreatePost={() => setCreatePostOpen(true)} />
       </div>
 
       <main style={{ paddingTop: 56, minHeight: '100dvh' }} className="dc-main">
-        <div style={{ maxWidth: 680, margin: '0 auto', padding: '24px 16px 80px' }} className="dc-content">
+        {/*
+          position:relative + zIndex:1 here is the core fix.
+          Every page rendered as {children} inherits this stacking context
+          and renders above the EtherealBackground automatically.
+          No changes needed in any individual page file.
+        */}
+        <div
+          style={{ maxWidth: 680, margin: '0 auto', padding: '24px 16px 80px', position: 'relative', zIndex: 1 }}
+          className="dc-content"
+        >
           {children}
         </div>
       </main>
 
-      <div className="dc-bottomnav-wrap">
+      <div className="dc-bottomnav-wrap" style={{ position: 'relative', zIndex: 10 }}>
         <BottomNav onCreatePost={() => setCreatePostOpen(true)} />
       </div>
 
