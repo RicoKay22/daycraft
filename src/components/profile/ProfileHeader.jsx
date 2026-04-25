@@ -32,7 +32,6 @@ export default function ProfileHeader({
   const initials    = (displayName || 'U').slice(0, 2).toUpperCase()
   const showAvatar  = avatar_url && !imgError
 
-  // ── Cover photo upload ─────────────────────────────────────────────────
   async function handleCoverChange(e) {
     const file = e.target.files?.[0]
     if (!file || !user) return
@@ -64,7 +63,7 @@ export default function ProfileHeader({
       transition={{ duration: 0.3 }}
       style={{ marginBottom: 20 }}
     >
-      {/* ── Cover — full width, edge to edge ────────────────────────── */}
+      {/* ── Cover — full width ───────────────────────────────────────── */}
       <div style={{
         position: 'relative',
         height: 180,
@@ -81,24 +80,17 @@ export default function ProfileHeader({
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           />
         )}
-
-        {/* Gradient overlay — darkens bottom so avatar + text read cleanly */}
         <div style={{
           position: 'absolute', inset: 0,
           background: 'linear-gradient(to bottom, transparent 30%, rgba(11,11,14,0.65) 100%)',
         }} />
-
-        {/* Subtle amber glow in top-left corner — Creator Gold identity */}
         <div style={{
-          position: 'absolute',
-          top: -40, left: -40,
-          width: 200, height: 200,
-          borderRadius: '50%',
+          position: 'absolute', top: -40, left: -40,
+          width: 200, height: 200, borderRadius: '50%',
           background: 'radial-gradient(circle, rgba(245,158,11,0.25) 0%, transparent 70%)',
           pointerEvents: 'none',
         }} />
 
-        {/* Change cover button — own profile only */}
         {isOwnProfile && (
           <>
             <input
@@ -117,21 +109,16 @@ export default function ProfileHeader({
                 padding: '6px 12px',
                 background: 'rgba(11,11,14,0.72)',
                 border: '1px solid rgba(245,158,11,0.3)',
-                borderRadius: 9999,
-                color: '#F59E0B',
+                borderRadius: 9999, color: '#F59E0B',
                 fontFamily: 'var(--font-heading)', fontSize: 10, fontWeight: 700,
-                letterSpacing: '0.04em',
-                backdropFilter: 'blur(8px)',
+                letterSpacing: '0.04em', backdropFilter: 'blur(8px)',
                 cursor: coverUploading ? 'not-allowed' : 'pointer',
                 transition: 'background 150ms, border-color 150ms',
               }}
               onMouseEnter={e => { if (!coverUploading) { e.currentTarget.style.background = 'rgba(245,158,11,0.2)'; e.currentTarget.style.borderColor = 'rgba(245,158,11,0.7)' }}}
               onMouseLeave={e => { e.currentTarget.style.background = 'rgba(11,11,14,0.72)'; e.currentTarget.style.borderColor = 'rgba(245,158,11,0.3)' }}
             >
-              {coverUploading
-                ? <Loader2 size={11} style={{ animation: 'spin 0.7s linear infinite' }} />
-                : <Camera size={11} />
-              }
+              {coverUploading ? <Loader2 size={11} style={{ animation: 'spin 0.7s linear infinite' }} /> : <Camera size={11} />}
               {coverUploading ? 'Uploading...' : 'Change cover'}
             </button>
           </>
@@ -140,55 +127,38 @@ export default function ProfileHeader({
 
       {/* ── Avatar + action row ──────────────────────────────────────── */}
       <div style={{
-        display: 'flex',
-        alignItems: 'flex-end',
-        justifyContent: 'space-between',
-        marginTop: -44,        // pulls avatar up to overlap the cover
-        padding: '0 4px',
-        marginBottom: 14,
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
+        marginTop: -44, padding: '0 4px', marginBottom: 14,
       }}>
-        {/* Avatar circle — overlaps cover */}
         <div style={{
-          width: 88, height: 88,
-          borderRadius: '50%',
+          width: 88, height: 88, borderRadius: '50%',
           background: showAvatar ? 'transparent' : 'var(--primary)',
-          border: '4px solid var(--bg)',          // bg-color ring separates from cover
-          outline: '2px solid #F59E0B',           // amber glow ring — Creator Gold
+          border: '4px solid var(--bg)',
+          outline: '2px solid #F59E0B',
           outlineOffset: 1,
           overflow: 'hidden',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           flexShrink: 0,
           boxShadow: '0 0 24px rgba(245,158,11,0.35)',
-          zIndex: 2,
-          position: 'relative',
+          zIndex: 2, position: 'relative',
         }}>
           {showAvatar
-            ? <img
-                src={avatar_url}
-                alt={displayName}
-                onError={() => setImgError(true)}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
-            : <span style={{
-                fontFamily: 'var(--font-heading)', fontSize: 28,
-                fontWeight: 700, color: '#0B0B0E',
-              }}>
+            ? <img src={avatar_url} alt={displayName} onError={() => setImgError(true)}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : <span style={{ fontFamily: 'var(--font-heading)', fontSize: 28, fontWeight: 700, color: '#0B0B0E' }}>
                 {initials}
               </span>
           }
         </div>
 
-        {/* Follow / Edit button */}
         <div style={{ paddingBottom: 6 }}>
           {isOwnProfile ? (
             <button
               onClick={onEdit}
               style={{
                 display: 'flex', alignItems: 'center', gap: 6,
-                padding: '9px 16px',
-                background: 'transparent',
-                border: '1px solid rgba(245,158,11,0.4)',
-                borderRadius: 9999,
+                padding: '9px 16px', background: 'transparent',
+                border: '1px solid rgba(245,158,11,0.4)', borderRadius: 9999,
                 color: '#F59E0B',
                 fontFamily: 'var(--font-heading)', fontSize: 11, fontWeight: 700,
                 letterSpacing: '0.04em', cursor: 'pointer',
@@ -214,8 +184,7 @@ export default function ProfileHeader({
                 fontFamily: 'var(--font-heading)', fontSize: 11, fontWeight: 700,
                 letterSpacing: '0.04em',
                 cursor: followLoading ? 'not-allowed' : 'pointer',
-                opacity: followLoading ? 0.7 : 1,
-                transition: 'all 200ms',
+                opacity: followLoading ? 0.7 : 1, transition: 'all 200ms',
               }}
               onMouseEnter={e => {
                 if (!followLoading && isFollowing) {
@@ -234,9 +203,7 @@ export default function ProfileHeader({
             >
               {followLoading
                 ? <Loader2 size={12} style={{ animation: 'spin 0.7s linear infinite' }} />
-                : isFollowing
-                  ? <><UserCheck size={12} /> Following</>
-                  : <><UserPlus size={12} /> Follow</>
+                : isFollowing ? <><UserCheck size={12} /> Following</> : <><UserPlus size={12} /> Follow</>
               }
             </motion.button>
           )}
@@ -248,14 +215,11 @@ export default function ProfileHeader({
         <h1 style={{
           fontFamily: 'var(--font-heading)', fontSize: 22,
           color: 'var(--text-primary)', margin: '0 0 3px',
-          letterSpacing: '-0.01em',
         }}>
           {displayName}
         </h1>
-        <p style={{
-          fontFamily: 'var(--font-mono)', fontSize: 12,
-          color: 'var(--text-muted)', margin: 0,
-        }}>
+        {/* text-secondary (not muted) — readable against amber background */}
+        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', margin: 0 }}>
           @{username}
         </p>
       </div>
@@ -265,18 +229,16 @@ export default function ProfileHeader({
         <p style={{
           padding: '0 4px',
           fontFamily: 'var(--font-body)', fontSize: 14,
-          color: 'var(--text-secondary)', lineHeight: 1.65,
-          margin: '0 0 14px',
+          color: 'var(--text-primary)',   // full brightness for bio
+          lineHeight: 1.65, margin: '0 0 14px',
         }}>
           {bio}
         </p>
       )}
 
-      {/* ── Stats row — inline text, Twitter/X style ─────────────────── */}
+      {/* ── Stats row — inline text ───────────────────────────────────── */}
       <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 20,
+        display: 'flex', alignItems: 'center', gap: 20,
         padding: '12px 4px 0',
         borderTop: '1px solid rgba(245,158,11,0.15)',
         flexWrap: 'wrap',
@@ -287,22 +249,16 @@ export default function ProfileHeader({
           { value: following_count, label: 'Following' },
         ].map(stat => (
           <div key={stat.label} style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
-            <span style={{
-              fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700,
-              color: '#F59E0B',        // amber — Creator Gold
-            }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700, color: '#F59E0B' }}>
               {formatCount(stat.value)}
             </span>
-            <span style={{
-              fontFamily: 'var(--font-body)', fontSize: 12,
-              color: 'var(--text-muted)',
-            }}>
+            {/* text-secondary — readable, not invisible muted */}
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--text-secondary)' }}>
               {stat.label}
             </span>
           </div>
         ))}
 
-        {/* Builder badge — far right */}
         <div style={{ marginLeft: 'auto' }}>
           <span style={{
             display: 'inline-flex', alignItems: 'center', gap: 4,

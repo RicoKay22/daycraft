@@ -2,8 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useAuth } from '../context/AuthContext'
 import {
-  fetchUserByUsername, fetchUserProfile,
-  selectUserById, selectFollowingIds,
+  selectFollowingIds,
   usersActions
 } from '../store/usersSlice'
 import { fetchUserPosts } from '../store/postsSlice'
@@ -11,32 +10,42 @@ import { selectPostsByUserId } from '../store/feedSlice'
 import { supabase } from '../lib/supabase'
 
 /**
- * useProfile — loads a profile by username + their posts
- * Handles both "own profile" and "other user" views
+ * useProfile — loads a profile by username + their posts + posts they liked
+ *
+ * LIKED POSTS FIX:
+ * Previously, "liked" tab filtered own posts by is_liked_by_me — so it only
+ * showed posts by THIS user that the viewer happened to have liked.
+ * It never fetched posts by other users that THIS profile owner liked.
+ *
+ * Fix: separate supabase query joins likes → posts → author for this user's
+ * liked posts. Returns likedPosts separately from posts (own posts).
  */
 export function useProfile(username) {
-  const dispatch        = useDispatch()
-  const { user, profile: myProfile } = useAuth()
+  const dispatch    = useDispatch()
+  const { user }    = useAuth()
 
-  const [profileUser, setProfileUser] = useState(null)
-  const [loading,     setLoading]     = useState(true)
-  const [error,       setError]       = useState(null)
-  const [isFollowing, setIsFollowing] = useState(false)
+  const [profileUser,   setProfileUser]   = useState(null)
+  const [loading,       setLoading]       = useState(true)
+  const [error,         setError]         = useState(null)
+  const [isFollowing,   setIsFollowing]   = useState(false)
   const [followLoading, setFollowLoading] = useState(false)
+  const [likedPosts,    setLikedPosts]    = useState([])
+  const [likedLoading,  setLikedLoading]  = useState(false)
 
   const followingIds = useSelector(selectFollowingIds)
   const isOwnProfile = profileUser?.id === user?.id
 
-  // Posts for this profile from Redux store
+  // Own posts for this profile from Redux store
   const posts = useSelector(state =>
     profileUser ? selectPostsByUserId(state, profileUser.id) : []
   )
 
-  // Load profile by username
+  // ── Load profile by username ─────────────────────────────────────────────
   useEffect(() => {
     if (!username) return
     setLoading(true)
     setError(null)
+    setLikedPosts([])
 
     supabase
       .from('profiles')
@@ -51,8 +60,11 @@ export function useProfile(username) {
         }
         setProfileUser(data)
 
-        // Fetch their posts
+        // Fetch their own posts into Redux
         dispatch(fetchUserPosts({ userId: data.id, page: 0, limit: 24 }))
+
+        // Fetch posts this user has liked — from ALL users, not just own
+        fetchLikedPosts(data.id)
 
         // Check follow status
         if (user?.id && data.id !== user.id) {
@@ -61,23 +73,57 @@ export function useProfile(username) {
 
         setLoading(false)
       })
-  }, [username, user?.id]) // eslint-disable-line
+  }, [username, user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync follow state when followingIds changes
+  // ── Fetch liked posts — all posts liked by this profile owner ────────────
+  async function fetchLikedPosts(profileId) {
+    setLikedLoading(true)
+    try {
+      const { data, error: err } = await supabase
+        .from('likes')
+        .select(`
+          post_id,
+          created_at,
+          post:posts!likes_post_id_fkey(
+            *,
+            author:profiles!posts_user_id_fkey(
+              id, username, full_name, avatar_url
+            )
+          )
+        `)
+        .eq('user_id', profileId)
+        .order('created_at', { ascending: false })
+        .limit(48)
+
+      if (err) throw err
+
+      // Flatten: extract the post object, mark as liked
+      const shaped = (data || [])
+        .filter(l => l.post)
+        .map(l => ({ ...l.post, is_liked_by_me: true }))
+
+      setLikedPosts(shaped)
+    } catch (err) {
+      console.error('fetchLikedPosts error:', err.message)
+    } finally {
+      setLikedLoading(false)
+    }
+  }
+
+  // ── Sync follow state when followingIds changes ──────────────────────────
   useEffect(() => {
     if (profileUser?.id) {
       setIsFollowing(followingIds.includes(profileUser.id))
     }
   }, [followingIds, profileUser?.id])
 
-  // ── Optimistic follow toggle ────────────────────────────────────────────
+  // ── Optimistic follow toggle ─────────────────────────────────────────────
   const toggleFollow = useCallback(async () => {
     if (!user || !profileUser || isOwnProfile || followLoading) return
     setFollowLoading(true)
 
     const nowFollowing = !isFollowing
 
-    // 1. Optimistic UI update
     setIsFollowing(nowFollowing)
     setProfileUser(prev => ({
       ...prev,
@@ -91,7 +137,6 @@ export function useProfile(username) {
     }))
 
     try {
-      // 2. API call
       if (nowFollowing) {
         const { error } = await supabase
           .from('follows')
@@ -105,7 +150,6 @@ export function useProfile(username) {
         if (error) throw error
       }
     } catch (err) {
-      // 3. Revert on failure
       console.error('Follow toggle failed:', err.message)
       setIsFollowing(!nowFollowing)
       setProfileUser(prev => ({
@@ -123,7 +167,7 @@ export function useProfile(username) {
     }
   }, [user, profileUser, isOwnProfile, isFollowing, followLoading, dispatch])
 
-  // Refresh profile after edit
+  // ── Refresh profile after edit ───────────────────────────────────────────
   const refreshProfile = useCallback(async () => {
     if (!profileUser?.id) return
     const { data } = await supabase
@@ -137,6 +181,8 @@ export function useProfile(username) {
   return {
     profileUser,
     posts,
+    likedPosts,
+    likedLoading,
     loading,
     error,
     isOwnProfile,

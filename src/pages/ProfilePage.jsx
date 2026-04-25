@@ -14,11 +14,13 @@ export default function ProfilePage() {
   const navigate                = useNavigate()
   const { profile: myProfile }  = useAuth()
   const [editOpen, setEditOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState('posts')  // 'posts' | 'liked'
+  const [activeTab, setActiveTab] = useState('posts')
 
   const {
     profileUser,
     posts,
+    likedPosts,
+    likedLoading,
     loading,
     error,
     isOwnProfile,
@@ -56,11 +58,7 @@ export default function ProfilePage() {
   return (
     <div style={{ position: 'relative' }}>
 
-      {/*
-        Creator Gold ambient layer — stacks on top of AppLayout's base.
-        Amber glow behind the profile content, matching the cover gradient
-        and avatar ring color for a cohesive Creator Gold identity.
-      */}
+      {/* Creator Gold ambient layer */}
       <EtherealBackground
         color="rgba(245, 158, 11, 0.22)"
         animationScale={45}
@@ -68,10 +66,9 @@ export default function ProfilePage() {
         opacity={0.85}
       />
 
-      {/* All content above the amber background */}
       <div style={{ position: 'relative', zIndex: 1 }}>
 
-        {/* Back button — only when viewing other profiles */}
+        {/* Back button */}
         {!isOwnProfile && (
           <motion.button
             initial={{ opacity: 0, x: -8 }}
@@ -80,23 +77,21 @@ export default function ProfilePage() {
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
               background: 'none', border: 'none', cursor: 'pointer',
-              color: 'var(--text-muted)',
+              color: 'var(--text-secondary)',
               fontFamily: 'var(--font-body)', fontSize: 13,
               padding: '0 0 16px', transition: 'color 150ms',
             }}
             onMouseEnter={e => e.currentTarget.style.color = '#F59E0B'}
-            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
           >
             <ArrowLeft size={15} /> Back
           </motion.button>
         )}
 
-        {/* ProfileHeader skeleton */}
+        {/* Skeleton */}
         {loading && (
           <div style={{ marginBottom: 20 }}>
-            {/* Cover skeleton */}
             <div className="skeleton" style={{ height: 180, borderRadius: 16, marginBottom: 0 }} />
-            {/* Avatar skeleton */}
             <div style={{ marginTop: -44, padding: '0 4px', marginBottom: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
               <div className="skeleton" style={{ width: 88, height: 88, borderRadius: '50%' }} />
               <div className="skeleton" style={{ width: 100, height: 36, borderRadius: 9999 }} />
@@ -120,10 +115,7 @@ export default function ProfilePage() {
           />
         )}
 
-        {/*
-          Tab switcher — underline style matching the other agent screenshot.
-          Amber underline indicator on active tab, not pill buttons.
-        */}
+        {/* Tabs — underline style, amber indicator */}
         {!loading && (
           <div style={{
             display: 'flex',
@@ -145,18 +137,17 @@ export default function ProfilePage() {
                   borderBottom: activeTab === tab.key
                     ? '2px solid #F59E0B'
                     : '2px solid transparent',
-                  marginBottom: -1,           // sits on top of the container border
+                  marginBottom: -1,
                   color: activeTab === tab.key
                     ? '#F59E0B'
-                    : 'var(--text-muted)',
+                    : 'var(--text-secondary)',    // secondary not muted — readable
                   fontFamily: 'var(--font-body)', fontSize: 14,
                   fontWeight: activeTab === tab.key ? 600 : 400,
                   cursor: 'pointer',
                   transition: 'color 150ms, border-color 150ms',
-                  letterSpacing: '0.01em',
                 }}
-                onMouseEnter={e => { if (activeTab !== tab.key) e.currentTarget.style.color = 'var(--text-secondary)' }}
-                onMouseLeave={e => { if (activeTab !== tab.key) e.currentTarget.style.color = 'var(--text-muted)' }}
+                onMouseEnter={e => { if (activeTab !== tab.key) e.currentTarget.style.color = 'var(--text-primary)' }}
+                onMouseLeave={e => { if (activeTab !== tab.key) e.currentTarget.style.color = 'var(--text-secondary)' }}
               >
                 {tab.label}
               </button>
@@ -164,18 +155,25 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* Post grid */}
-        {!loading && (
+        {/* Post grid — own posts */}
+        {!loading && activeTab === 'posts' && (
           <PostGrid
-            posts={activeTab === 'posts' ? posts : posts.filter(p => p.is_liked_by_me)}
+            posts={posts}
             loading={loading}
             emptyMessage={
-              activeTab === 'posts'
-                ? isOwnProfile
-                  ? "You haven't posted anything yet. Start crafting!"
-                  : `@${username} hasn't posted yet.`
-                : 'No liked posts yet.'
+              isOwnProfile
+                ? "You haven't posted anything yet. Start crafting!"
+                : `@${username} hasn't posted yet.`
             }
+          />
+        )}
+
+        {/* Post grid — liked posts (all users, fetched separately) */}
+        {!loading && activeTab === 'liked' && (
+          <PostGrid
+            posts={likedPosts}
+            loading={likedLoading}
+            emptyMessage="No liked posts yet."
           />
         )}
 
