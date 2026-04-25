@@ -32,12 +32,11 @@ export default function ProfileHeader({
   const initials    = (displayName || 'U').slice(0, 2).toUpperCase()
   const showAvatar  = avatar_url && !imgError
 
-  // ── Cover photo upload ────────────────────────────────────────────────────
+  // ── Cover photo upload ─────────────────────────────────────────────────
   async function handleCoverChange(e) {
     const file = e.target.files?.[0]
     if (!file || !user) return
     if (file.size > 5 * 1024 * 1024) { alert('Cover image must be under 5MB'); return }
-
     setCoverUploading(true)
     try {
       const ext  = file.name.split('.').pop().toLowerCase()
@@ -46,11 +45,9 @@ export default function ProfileHeader({
         .from('daycraft-media')
         .upload(path, file, { cacheControl: '3600', upsert: true })
       if (upErr) throw upErr
-
       const { data } = supabase.storage.from('daycraft-media').getPublicUrl(path)
-      const cover_url_new = `${data.publicUrl}?t=${Date.now()}`
-
-      await dispatch(updateProfile({ userId: user.id, updates: { cover_url: cover_url_new } }))
+      const newUrl = `${data.publicUrl}?t=${Date.now()}`
+      await dispatch(updateProfile({ userId: user.id, updates: { cover_url: newUrl } }))
       await refreshProfile(user.id)
       onCoverUpdated?.()
     } catch (err) {
@@ -65,22 +62,17 @@ export default function ProfileHeader({
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      style={{
-        background: 'var(--surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 16,
-        overflow: 'hidden',
-        marginBottom: 20,
-      }}
+      style={{ marginBottom: 20 }}
     >
-      {/* ── Cover photo area ──────────────────────────────────────────── */}
+      {/* ── Cover — full width, edge to edge ────────────────────────── */}
       <div style={{
         position: 'relative',
-        height: 140,
+        height: 180,
+        borderRadius: 16,
+        overflow: 'hidden',
         background: cover_url
           ? 'transparent'
-          : 'linear-gradient(135deg, #92400E 0%, #F59E0B 40%, #A3E635 100%)',
-        overflow: 'hidden',
+          : 'linear-gradient(135deg, #78350F 0%, #92400E 25%, #B45309 50%, #F59E0B 75%, #A3E635 100%)',
       }}>
         {cover_url && (
           <img
@@ -90,13 +82,23 @@ export default function ProfileHeader({
           />
         )}
 
-        {/* Gradient overlay for readability */}
+        {/* Gradient overlay — darkens bottom so avatar + text read cleanly */}
         <div style={{
           position: 'absolute', inset: 0,
-          background: 'linear-gradient(to bottom, rgba(11,11,14,0.1) 0%, rgba(11,11,14,0.55) 100%)',
+          background: 'linear-gradient(to bottom, transparent 30%, rgba(11,11,14,0.65) 100%)',
         }} />
 
-        {/* Upload cover button — own profile only */}
+        {/* Subtle amber glow in top-left corner — Creator Gold identity */}
+        <div style={{
+          position: 'absolute',
+          top: -40, left: -40,
+          width: 200, height: 200,
+          borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(245,158,11,0.25) 0%, transparent 70%)',
+          pointerEvents: 'none',
+        }} />
+
+        {/* Change cover button — own profile only */}
         {isOwnProfile && (
           <>
             <input
@@ -110,23 +112,25 @@ export default function ProfileHeader({
               onClick={() => coverInputRef.current?.click()}
               disabled={coverUploading}
               style={{
-                position: 'absolute', bottom: 10, right: 12,
+                position: 'absolute', bottom: 12, right: 14,
                 display: 'flex', alignItems: 'center', gap: 5,
                 padding: '6px 12px',
                 background: 'rgba(11,11,14,0.72)',
-                border: '1px solid rgba(255,255,255,0.15)',
+                border: '1px solid rgba(245,158,11,0.3)',
                 borderRadius: 9999,
-                color: '#fff', cursor: coverUploading ? 'not-allowed' : 'pointer',
-                fontFamily: 'var(--font-heading)', fontSize: 11, fontWeight: 700,
+                color: '#F59E0B',
+                fontFamily: 'var(--font-heading)', fontSize: 10, fontWeight: 700,
+                letterSpacing: '0.04em',
                 backdropFilter: 'blur(8px)',
-                transition: 'background 150ms',
+                cursor: coverUploading ? 'not-allowed' : 'pointer',
+                transition: 'background 150ms, border-color 150ms',
               }}
-              onMouseEnter={e => { if (!coverUploading) e.currentTarget.style.background = 'rgba(245,158,11,0.8)' }}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(11,11,14,0.72)'}
+              onMouseEnter={e => { if (!coverUploading) { e.currentTarget.style.background = 'rgba(245,158,11,0.2)'; e.currentTarget.style.borderColor = 'rgba(245,158,11,0.7)' }}}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(11,11,14,0.72)'; e.currentTarget.style.borderColor = 'rgba(245,158,11,0.3)' }}
             >
               {coverUploading
-                ? <Loader2 size={12} style={{ animation: 'spin 0.7s linear infinite' }} />
-                : <Camera size={12} />
+                ? <Loader2 size={11} style={{ animation: 'spin 0.7s linear infinite' }} />
+                : <Camera size={11} />
               }
               {coverUploading ? 'Uploading...' : 'Change cover'}
             </button>
@@ -134,145 +138,183 @@ export default function ProfileHeader({
         )}
       </div>
 
-      {/* ── Profile info area ─────────────────────────────────────────── */}
-      <div style={{ padding: '0 20px 20px' }}>
-
-        {/* Avatar — overlaps cover */}
+      {/* ── Avatar + action row ──────────────────────────────────────── */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'flex-end',
+        justifyContent: 'space-between',
+        marginTop: -44,        // pulls avatar up to overlap the cover
+        padding: '0 4px',
+        marginBottom: 14,
+      }}>
+        {/* Avatar circle — overlaps cover */}
         <div style={{
-          marginTop: -36,
-          marginBottom: 12,
-          display: 'flex',
-          alignItems: 'flex-end',
-          justifyContent: 'space-between',
+          width: 88, height: 88,
+          borderRadius: '50%',
+          background: showAvatar ? 'transparent' : 'var(--primary)',
+          border: '4px solid var(--bg)',          // bg-color ring separates from cover
+          outline: '2px solid #F59E0B',           // amber glow ring — Creator Gold
+          outlineOffset: 1,
+          overflow: 'hidden',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0,
+          boxShadow: '0 0 24px rgba(245,158,11,0.35)',
+          zIndex: 2,
+          position: 'relative',
         }}>
-          {/* Avatar circle */}
-          <div style={{
-            width: 72, height: 72,
-            borderRadius: '50%',
-            background: showAvatar ? 'transparent' : 'var(--primary)',
-            border: '3px solid var(--surface)',
-            overflow: 'hidden',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0,
-            boxShadow: '0 0 0 2px var(--primary)',
-          }}>
-            {showAvatar
-              ? <img
-                  src={avatar_url}
-                  alt={displayName}
-                  onError={() => setImgError(true)}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                />
-              : <span style={{ fontFamily: 'var(--font-heading)', fontSize: 24, fontWeight: 700, color: '#0B0B0E' }}>
-                  {initials}
-                </span>
-            }
-          </div>
-
-          {/* Action button */}
-          <div style={{ paddingBottom: 4 }}>
-            {isOwnProfile ? (
-              <button
-                onClick={onEdit}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '8px 14px',
-                  background: 'var(--surface-raised)',
-                  border: '1px solid var(--border-bright)',
-                  borderRadius: 9999,
-                  color: 'var(--text-secondary)',
-                  fontFamily: 'var(--font-heading)', fontSize: 12, fontWeight: 700,
-                  letterSpacing: '0.04em', cursor: 'pointer',
-                  transition: 'border-color 150ms, color 150ms',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)' }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-bright)'; e.currentTarget.style.color = 'var(--text-secondary)' }}
-              >
-                <Settings size={13} /> Edit Profile
-              </button>
-            ) : (
-              <motion.button
-                onClick={onFollow}
-                disabled={followLoading}
-                whileTap={{ scale: followLoading ? 1 : 0.95 }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '8px 16px',
-                  background: isFollowing ? 'transparent' : 'var(--primary)',
-                  border: `1px solid ${isFollowing ? 'var(--border-bright)' : 'var(--primary)'}`,
-                  borderRadius: 9999,
-                  color: isFollowing ? 'var(--text-secondary)' : '#0B0B0E',
-                  fontFamily: 'var(--font-heading)', fontSize: 12, fontWeight: 700,
-                  letterSpacing: '0.04em',
-                  cursor: followLoading ? 'not-allowed' : 'pointer',
-                  opacity: followLoading ? 0.7 : 1, transition: 'all 200ms',
-                }}
-                onMouseEnter={e => { if (!followLoading && isFollowing) { e.currentTarget.style.borderColor = 'var(--danger)'; e.currentTarget.style.color = 'var(--danger)' }}}
-                onMouseLeave={e => { if (isFollowing) { e.currentTarget.style.borderColor = 'var(--border-bright)'; e.currentTarget.style.color = 'var(--text-secondary)' }}}
-              >
-                {isFollowing
-                  ? <><UserCheck size={13} /> Following</>
-                  : <><UserPlus size={13} /> Follow</>
-                }
-              </motion.button>
-            )}
-          </div>
+          {showAvatar
+            ? <img
+                src={avatar_url}
+                alt={displayName}
+                onError={() => setImgError(true)}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            : <span style={{
+                fontFamily: 'var(--font-heading)', fontSize: 28,
+                fontWeight: 700, color: '#0B0B0E',
+              }}>
+                {initials}
+              </span>
+          }
         </div>
 
-        {/* Name + username */}
+        {/* Follow / Edit button */}
+        <div style={{ paddingBottom: 6 }}>
+          {isOwnProfile ? (
+            <button
+              onClick={onEdit}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '9px 16px',
+                background: 'transparent',
+                border: '1px solid rgba(245,158,11,0.4)',
+                borderRadius: 9999,
+                color: '#F59E0B',
+                fontFamily: 'var(--font-heading)', fontSize: 11, fontWeight: 700,
+                letterSpacing: '0.04em', cursor: 'pointer',
+                transition: 'background 150ms, border-color 150ms',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(245,158,11,0.1)'; e.currentTarget.style.borderColor = '#F59E0B' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(245,158,11,0.4)' }}
+            >
+              <Settings size={12} /> Edit Profile
+            </button>
+          ) : (
+            <motion.button
+              onClick={onFollow}
+              disabled={followLoading}
+              whileTap={{ scale: followLoading ? 1 : 0.95 }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '9px 18px',
+                background: isFollowing ? 'transparent' : '#F59E0B',
+                border: `1px solid ${isFollowing ? 'rgba(245,158,11,0.4)' : '#F59E0B'}`,
+                borderRadius: 9999,
+                color: isFollowing ? '#F59E0B' : '#0B0B0E',
+                fontFamily: 'var(--font-heading)', fontSize: 11, fontWeight: 700,
+                letterSpacing: '0.04em',
+                cursor: followLoading ? 'not-allowed' : 'pointer',
+                opacity: followLoading ? 0.7 : 1,
+                transition: 'all 200ms',
+              }}
+              onMouseEnter={e => {
+                if (!followLoading && isFollowing) {
+                  e.currentTarget.style.background = 'rgba(239,68,68,0.1)'
+                  e.currentTarget.style.borderColor = '#EF4444'
+                  e.currentTarget.style.color = '#EF4444'
+                }
+              }}
+              onMouseLeave={e => {
+                if (isFollowing) {
+                  e.currentTarget.style.background = 'transparent'
+                  e.currentTarget.style.borderColor = 'rgba(245,158,11,0.4)'
+                  e.currentTarget.style.color = '#F59E0B'
+                }
+              }}
+            >
+              {followLoading
+                ? <Loader2 size={12} style={{ animation: 'spin 0.7s linear infinite' }} />
+                : isFollowing
+                  ? <><UserCheck size={12} /> Following</>
+                  : <><UserPlus size={12} /> Follow</>
+              }
+            </motion.button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Name + handle ────────────────────────────────────────────── */}
+      <div style={{ padding: '0 4px', marginBottom: 8 }}>
         <h1 style={{
-          fontFamily: 'var(--font-heading)', fontSize: 20,
-          color: 'var(--text-primary)', margin: '0 0 2px',
+          fontFamily: 'var(--font-heading)', fontSize: 22,
+          color: 'var(--text-primary)', margin: '0 0 3px',
+          letterSpacing: '-0.01em',
         }}>
           {displayName}
         </h1>
-        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px' }}>
+        <p style={{
+          fontFamily: 'var(--font-mono)', fontSize: 12,
+          color: 'var(--text-muted)', margin: 0,
+        }}>
           @{username}
         </p>
+      </div>
 
-        {/* Bio */}
-        {bio && (
-          <p style={{
-            fontFamily: 'var(--font-body)', fontSize: 14,
-            color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 16px',
-          }}>
-            {bio}
-          </p>
-        )}
-
-        {/* Stats + Builder badge */}
-        <div style={{
-          display: 'flex', gap: 24, alignItems: 'center',
-          paddingTop: 14, borderTop: '1px solid var(--border)',
-          flexWrap: 'wrap',
+      {/* ── Bio ──────────────────────────────────────────────────────── */}
+      {bio && (
+        <p style={{
+          padding: '0 4px',
+          fontFamily: 'var(--font-body)', fontSize: 14,
+          color: 'var(--text-secondary)', lineHeight: 1.65,
+          margin: '0 0 14px',
         }}>
-          {[
-            { value: post_count,      label: 'Posts' },
-            { value: follower_count,  label: 'Followers' },
-            { value: following_count, label: 'Following' },
-          ].map(stat => (
-            <div key={stat.label}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 700, color: 'var(--primary)', display: 'block' }}>
-                {formatCount(stat.value)}
-              </span>
-              <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)' }}>
-                {stat.label}
-              </span>
-            </div>
-          ))}
+          {bio}
+        </p>
+      )}
 
-          <div style={{ marginLeft: 'auto' }}>
+      {/* ── Stats row — inline text, Twitter/X style ─────────────────── */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 20,
+        padding: '12px 4px 0',
+        borderTop: '1px solid rgba(245,158,11,0.15)',
+        flexWrap: 'wrap',
+      }}>
+        {[
+          { value: post_count,      label: 'Posts' },
+          { value: follower_count,  label: 'Followers' },
+          { value: following_count, label: 'Following' },
+        ].map(stat => (
+          <div key={stat.label} style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
             <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-              padding: '3px 8px',
-              background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)',
-              borderRadius: 9999,
-              fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700,
-              color: '#22C55E', letterSpacing: '0.06em',
+              fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700,
+              color: '#F59E0B',        // amber — Creator Gold
             }}>
-              <Code2 size={9} /> BUILDER
+              {formatCount(stat.value)}
+            </span>
+            <span style={{
+              fontFamily: 'var(--font-body)', fontSize: 12,
+              color: 'var(--text-muted)',
+            }}>
+              {stat.label}
             </span>
           </div>
+        ))}
+
+        {/* Builder badge — far right */}
+        <div style={{ marginLeft: 'auto' }}>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            padding: '3px 9px',
+            background: 'rgba(245,158,11,0.1)',
+            border: '1px solid rgba(245,158,11,0.25)',
+            borderRadius: 9999,
+            fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700,
+            color: '#F59E0B', letterSpacing: '0.06em',
+          }}>
+            <Code2 size={9} /> BUILDER
+          </span>
         </div>
       </div>
     </motion.div>
