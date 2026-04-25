@@ -77,7 +77,7 @@ export default function FeedPage() {
           }}>
             {greeting}, <span style={{ color: 'var(--accent)' }}>{name}</span> 👋
           </h1>
-          <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
+          <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--text-secondary)', margin: 0 }}>
             What's everyone building today?
           </p>
         </motion.div>
@@ -136,6 +136,13 @@ export default function FeedPage() {
             {forYouPosts.map(post => (
               <PostCard key={post.id} post={post} onComment={setCommentPost} />
             ))}
+             <p style={{
+                textAlign: 'center', padding: '24px 0',
+                fontFamily: 'var(--font-mono)', fontSize: 13,
+                color: 'var(--text-secondary)', letterSpacing: '0.06em',
+              }}>
+                YOU'VE SEEN IT ALL · CRAFT SOMETHING NEW
+              </p>
           </div>
         )}
 
@@ -158,8 +165,8 @@ export default function FeedPage() {
             {!followingHasMore && feedPosts.length > 0 && (
               <p style={{
                 textAlign: 'center', padding: '24px 0',
-                fontFamily: 'var(--font-mono)', fontSize: 11,
-                color: 'var(--text-muted)', letterSpacing: '0.06em',
+                fontFamily: 'var(--font-mono)', fontSize: 13,
+                color: 'var(--text-secondary)', letterSpacing: '0.06em',
               }}>
                 YOU'VE SEEN IT ALL · CRAFT SOMETHING NEW
               </p>

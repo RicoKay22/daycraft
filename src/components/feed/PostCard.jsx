@@ -1,15 +1,18 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { MessageCircle, Share2, MoreHorizontal, Trash2, Code2, Dumbbell, BookOpen, Flame, Zap, Coffee } from 'lucide-react'
-import { useDispatch } from 'react-redux'
+import { MessageCircle, Share2, MoreHorizontal, Trash2, Code2, Dumbbell, BookOpen, Flame, Zap, Coffee, Repeat2 } from 'lucide-react'
+import { useDispatch, useSelector } from 'react-redux'
 import { formatDistanceToNow } from '../utils/time'
 import { useLike } from '../../hooks/useLike'
-import { deletePost } from '../../store/postsSlice'
+import {
+  deletePost, toggleRepost, trackImpression,
+  postsActions, selectImpressionTracked,
+} from '../../store/postsSlice'
 import { useAuth } from '../../context/AuthContext'
 import LikeButton from '../ui/LikeButton'
 
-// ── Post type tags — green palette (calm content zone) ───────────────────────
+// ── Post type tags ────────────────────────────────────────────────────────────
 const POST_TYPES = {
   dev:     { icon: Code2,    label: 'Dev',     color: '#22C55E', bg: 'rgba(34,197,94,0.1)' },
   workout: { icon: Dumbbell, label: 'Workout', color: '#A3E635', bg: 'rgba(163,230,53,0.1)' },
@@ -20,14 +23,11 @@ const POST_TYPES = {
 }
 
 function detectType(content = '') {
-  // Check explicit [TYPE] prefix first (set by CreatePostModal)
   const explicit = content.match(/^\[(DEV|WORKOUT|BUILD|READ|LOG)\]/i)
   if (explicit) {
-    const t = explicit[1].toLowerCase()
     const map = { dev: 'dev', workout: 'workout', build: 'build', read: 'read', log: 'log' }
-    return map[t] || 'other'
+    return map[explicit[1].toLowerCase()] || 'other'
   }
-  // Strip prefix before keyword matching to avoid [DEV] matching 'dev' keyword
   const stripped = content.replace(/^\[\w+\]\s*/, '')
   const lower = stripped.toLowerCase()
   if (/\b(code|ship|deploy|commit|react|js|python|api)\b/.test(lower)) return 'dev'
@@ -38,33 +38,58 @@ function detectType(content = '') {
   return 'other'
 }
 
-// Strip the [TYPE] prefix for display — users should only see their actual words
 function stripTypePrefix(text = '') {
   return text.replace(/^\[\w+\]\s*/, '').trim()
 }
 
 export default function PostCard({ post, onComment }) {
-  const { user }    = useAuth()
-  const navigate    = useNavigate()
-  const dispatch    = useDispatch()
+  const { user }       = useAuth()
+  const navigate       = useNavigate()
+  const dispatch       = useDispatch()
   const { toggleLike } = useLike()
 
-  const [menuOpen,    setMenuOpen]    = useState(false)
-  const [deleting,    setDeleting]    = useState(false)
-  const [copyDone,    setCopyDone]    = useState(false)
+  const impressionTracked = useSelector(selectImpressionTracked)
+  const cardRef           = useRef(null)
 
-  const isOwner  = user?.id === post.user_id
-  const type     = detectType(post.content)
-  const postType = POST_TYPES[type] || POST_TYPES.other
-  const TypeIcon = postType.icon
+  const [menuOpen,  setMenuOpen]  = useState(false)
+  const [deleting,  setDeleting]  = useState(false)
+  const [copyDone,  setCopyDone]  = useState(false)
+  const [reposting, setReposting] = useState(false)
 
-  const author   = post.author || {}
-  const username = author.username || 'unknown'
-  const name     = author.full_name || username
-  const avatar   = author.avatar_url
-  const initials = (name || 'U').slice(0, 2).toUpperCase()
-  const timeAgo  = formatDistanceToNow(post.created_at)
+  const isOwner      = user?.id === post.user_id
+  const type         = detectType(post.content)
+  const postType     = POST_TYPES[type] || POST_TYPES.other
+  const TypeIcon     = postType.icon
+  const author       = post.author || {}
+  const username     = author.username || 'unknown'
+  const name         = author.full_name || username
+  const avatar       = author.avatar_url
+  const initials     = (name || 'U').slice(0, 2).toUpperCase()
+  const timeAgo      = formatDistanceToNow(post.created_at)
+  const isReposted   = post.is_reposted_by_me || false
 
+  // ── Impression tracking — IntersectionObserver ────────────────────────────
+  // Fires once per post per session when the card enters the viewport.
+  // This is the same API required by the assignment (IntersectionObserver).
+  useEffect(() => {
+    if (!cardRef.current || impressionTracked.includes(post.id)) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          dispatch(postsActions.markImpressionTracked(post.id))
+          dispatch(trackImpression(post.id))
+          observer.disconnect()
+        }
+      },
+      { threshold: 0.5 }   // 50% of card must be visible to count as an impression
+    )
+
+    observer.observe(cardRef.current)
+    return () => observer.disconnect()
+  }, [post.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Delete ────────────────────────────────────────────────────────────────
   async function handleDelete() {
     if (!window.confirm('Delete this post?')) return
     setDeleting(true)
@@ -73,20 +98,40 @@ export default function PostCard({ post, onComment }) {
     setDeleting(false)
   }
 
-  async function handleShare() {
+  // ── Repost (optimistic) ───────────────────────────────────────────────────
+  async function handleRepost(e) {
+    e.stopPropagation()
+    if (reposting) return
+    setReposting(true)
+
+    // Optimistic update immediately
+    dispatch(postsActions.toggleRepostOptimistic({ postId: post.id, reposted: !isReposted }))
+
+    // API call in background — postsSlice reverts on failure
+    await dispatch(toggleRepost({
+      postId: post.id,
+      userId: user.id,
+      currentlyReposted: isReposted,
+    }))
+    setReposting(false)
+  }
+
+  // ── Share / copy link ─────────────────────────────────────────────────────
+  async function handleShare(e) {
+    e.stopPropagation()
     const url = `${window.location.origin}/post/${post.id}`
     try {
       await navigator.clipboard.writeText(url)
       setCopyDone(true)
       setTimeout(() => setCopyDone(false), 2000)
     } catch {
-      // fallback: open share dialog
       if (navigator.share) navigator.share({ url })
     }
   }
 
   return (
     <motion.article
+      ref={cardRef}
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -8 }}
@@ -103,7 +148,7 @@ export default function PostCard({ post, onComment }) {
         overflow: 'visible',
       }}
     >
-      {/* ── Header ──────────────────────────────────────────────────── */}
+      {/* ── Header ────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
 
         {/* Avatar */}
@@ -136,8 +181,6 @@ export default function PostCard({ post, onComment }) {
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>
               @{username}
             </span>
-
-            {/* Post type badge — green accent */}
             <span style={{
               display: 'inline-flex', alignItems: 'center', gap: 4,
               padding: '2px 7px',
@@ -176,15 +219,10 @@ export default function PostCard({ post, onComment }) {
 
             {menuOpen && (
               <>
-                {/* Backdrop */}
-                <div
-                  onClick={() => setMenuOpen(false)}
-                  style={{ position: 'fixed', inset: 0, zIndex: 10 }}
-                />
+                <div onClick={() => setMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 10 }} />
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: -4 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
                   transition={{ duration: 0.12 }}
                   style={{
                     position: 'absolute', top: 'calc(100% + 4px)', right: 0,
@@ -208,8 +246,7 @@ export default function PostCard({ post, onComment }) {
                     onMouseEnter={e => e.currentTarget.style.background = 'var(--danger-dim)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'none'}
                   >
-                    <Trash2 size={13} />
-                    Delete post
+                    <Trash2 size={13} /> Delete post
                   </button>
                 </motion.div>
               </>
@@ -218,11 +255,8 @@ export default function PostCard({ post, onComment }) {
         )}
       </div>
 
-      {/* ── Content ──────────────────────────────────────────────────── */}
-      <div
-        onClick={() => navigate(`/post/${post.id}`)}
-        style={{ cursor: 'pointer' }}
-      >
+      {/* ── Content ───────────────────────────────────────────────────── */}
+      <div onClick={() => navigate(`/post/${post.id}`)} style={{ cursor: 'pointer' }}>
         <p style={{
           fontFamily: 'var(--font-body)', fontSize: 14,
           color: 'var(--text-primary)', lineHeight: 1.65,
@@ -232,16 +266,11 @@ export default function PostCard({ post, onComment }) {
           {stripTypePrefix(post.content)}
         </p>
 
-        {/* Post image */}
         {post.image_url && (
-          <div style={{
-            borderRadius: 10, overflow: 'hidden',
-            marginBottom: 12,
-            border: '1px solid var(--border)',
-          }}>
+          <div style={{ borderRadius: 10, overflow: 'hidden', marginBottom: 12, border: '1px solid var(--border)' }}>
             <img
               src={post.image_url}
-              alt="Post image"
+              alt="Post"
               loading="lazy"
               style={{ width: '100%', display: 'block', maxHeight: 400, objectFit: 'cover' }}
             />
@@ -249,12 +278,11 @@ export default function PostCard({ post, onComment }) {
         )}
       </div>
 
-      {/* ── Actions ──────────────────────────────────────────────────── */}
+      {/* ── Actions ───────────────────────────────────────────────────── */}
       <div style={{
         display: 'flex', alignItems: 'center',
         borderTop: '1px solid var(--border)',
-        paddingTop: 8, marginTop: 4,
-        gap: 4,
+        paddingTop: 8, marginTop: 4, gap: 4,
       }}>
         {/* Like */}
         <LikeButton
@@ -263,24 +291,17 @@ export default function PostCard({ post, onComment }) {
           onToggle={() => toggleLike(post.id, post.is_liked_by_me)}
         />
 
-        {/* Comment — navigates to post detail until CommentSheet (Phase 6) */}
+        {/* Comment */}
         <button
           onClick={(e) => { e.stopPropagation(); if (onComment) { onComment(post) } else { navigate(`/post/${post.id}`) } }}
           style={{
             display: 'flex', alignItems: 'center', gap: 5,
             background: 'none', border: 'none', cursor: 'pointer',
             padding: '6px 8px', borderRadius: 8,
-            color: 'var(--text-muted)',
-            transition: 'background 150ms, color 150ms',
+            color: 'var(--text-muted)', transition: 'background 150ms, color 150ms',
           }}
-          onMouseEnter={e => {
-            e.currentTarget.style.background = 'rgba(34,197,94,0.08)'
-            e.currentTarget.style.color = '#22C55E'
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.background = 'none'
-            e.currentTarget.style.color = 'var(--text-muted)'
-          }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(34,197,94,0.08)'; e.currentTarget.style.color = '#22C55E' }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-muted)' }}
         >
           <MessageCircle size={16} strokeWidth={1.8} />
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
@@ -288,9 +309,33 @@ export default function PostCard({ post, onComment }) {
           </span>
         </button>
 
-        {/* Share / Copy link */}
+        {/* Repost — green when active, same as X/Twitter repost */}
         <button
-          onClick={(e) => { e.stopPropagation(); handleShare() }}
+          onClick={handleRepost}
+          disabled={reposting}
+          title={isReposted ? 'Undo repost' : 'Repost'}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            background: isReposted ? 'rgba(34,197,94,0.08)' : 'none',
+            border: 'none', cursor: reposting ? 'not-allowed' : 'pointer',
+            padding: '6px 8px', borderRadius: 8,
+            color: isReposted ? '#22C55E' : 'var(--text-muted)',
+            opacity: reposting ? 0.6 : 1,
+            transition: 'background 150ms, color 150ms',
+          }}
+          onMouseEnter={e => { if (!reposting) { e.currentTarget.style.background = 'rgba(34,197,94,0.08)'; e.currentTarget.style.color = '#22C55E' }}}
+          onMouseLeave={e => { if (!isReposted) { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-muted)' }}}
+        >
+          <Repeat2 size={16} strokeWidth={1.8} />
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+            {post.repost_count || 0}
+          </span>
+        </button>
+
+        {/* Share / copy link */}
+        <button
+          onClick={handleShare}
+          title="Copy post link"
           style={{
             display: 'flex', alignItems: 'center', gap: 5,
             background: 'none', border: 'none', cursor: 'pointer',
@@ -298,25 +343,12 @@ export default function PostCard({ post, onComment }) {
             color: copyDone ? '#22C55E' : 'var(--text-muted)',
             transition: 'background 150ms, color 150ms',
           }}
-          onMouseEnter={e => {
-            if (!copyDone) {
-              e.currentTarget.style.background = 'var(--surface-raised)'
-              e.currentTarget.style.color = 'var(--text-secondary)'
-            }
-          }}
-          onMouseLeave={e => {
-            if (!copyDone) {
-              e.currentTarget.style.background = 'none'
-              e.currentTarget.style.color = 'var(--text-muted)'
-            }
-          }}
-          title="Copy post link"
+          onMouseEnter={e => { if (!copyDone) { e.currentTarget.style.background = 'var(--surface-raised)'; e.currentTarget.style.color = 'var(--text-secondary)' }}}
+          onMouseLeave={e => { if (!copyDone) { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-muted)' }}}
         >
           <Share2 size={15} strokeWidth={1.8} />
           {copyDone && (
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#22C55E' }}>
-              Copied!
-            </span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: '#22C55E' }}>Copied!</span>
           )}
         </button>
       </div>
