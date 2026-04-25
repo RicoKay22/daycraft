@@ -6,7 +6,6 @@ import { AuthProvider } from './context/AuthContext'
 import AuthGuard from './components/AuthGuard'
 import AppLayout from './components/layout/AppLayout'
 import ErrorBoundary from './components/ErrorBoundary'
-
 // Pages
 import AuthPage           from './pages/AuthPage'
 import FeedPage           from './pages/FeedPage'
@@ -35,7 +34,8 @@ export default function App() {
     <Provider store={store}>
       <ThemeProvider>
         <AuthProvider>
-          <BrowserRouter>
+          {/* future prop opts into React Router v7 behaviour early — silences deprecation warnings */}
+          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <Routes>
               {/* Public */}
               <Route path="/auth"            element={<AuthPage />} />
