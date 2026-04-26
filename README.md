@@ -180,7 +180,7 @@ src/
 
 
 - GitHub: [@RicoKay22](https://github.com/RicoKay22)
-- Contact Card: [Olumude Olayinka] (https://digital-business-card-beta-opal.vercel.app/)
+- Contact Card: [@Olumide-Olayinka] (https://digital-business-card-beta-opal.vercel.app/)
 - Brand: Rico Kay · *Where Design Meets Logic*
 
 ---
