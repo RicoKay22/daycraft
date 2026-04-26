@@ -213,7 +213,7 @@ export default function CommentSheet({ post, isOpen, onClose }) {
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                       }}>
                         {a.avatar_url
-                          ? <img src={a.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          ? <img src={a.avatar_url} alt={`${a.username || 'User'} avatar`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                           : <span style={{ fontFamily: 'var(--font-heading)', fontSize: 10, fontWeight: 700, color: isOwn ? '#0B0B0E' : 'var(--text-secondary)' }}>{initials}</span>
                         }
                       </div>
@@ -263,7 +263,7 @@ export default function CommentSheet({ post, isOpen, onClose }) {
                   border: '1px solid var(--border)',
                 }}>
                   {profile?.avatar_url
-                    ? <img src={profile.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ? <img src={profile.avatar_url} alt={`${profile.username || 'Your'} avatar`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     : <span style={{ fontFamily: 'var(--font-heading)', fontSize: 10, fontWeight: 700, color: '#0B0B0E' }}>
                         {(profile?.username || 'Y').slice(0, 2).toUpperCase()}
                       </span>

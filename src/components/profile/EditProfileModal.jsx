@@ -166,7 +166,7 @@ export default function EditProfileModal({ isOpen, profileUser, onClose, onSaved
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
                       {currentAvatar
-                        ? <img src={currentAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ? <img src={currentAvatar} alt={`${profileUser?.username || 'User'} avatar`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         : <span style={{ fontFamily: 'var(--font-heading)', fontSize: 26, fontWeight: 700, color: '#0B0B0E' }}>{currentInitials}</span>
                       }
                     </div>
