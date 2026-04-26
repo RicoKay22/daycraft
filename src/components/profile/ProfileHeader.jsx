@@ -34,7 +34,7 @@ export default function ProfileHeader({
 
   async function handleCoverChange(e) {
     const file = e.target.files?.[0]
-    if (!file || !user) return
+    if (!file || !user?.id) return
     if (file.size > 5 * 1024 * 1024) { alert('Cover image must be under 5MB'); return }
     setCoverUploading(true)
     try {
