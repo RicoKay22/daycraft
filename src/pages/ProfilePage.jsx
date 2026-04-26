@@ -9,6 +9,12 @@ import EditProfileModal from '../components/profile/EditProfileModal'
 import EtherealBackground from '../components/ui/EtherealBackground'
 import { useAuth } from '../context/AuthContext'
 
+const TABS = [
+  { key: 'posts',    label: 'Posts' },
+  { key: 'reposts',  label: 'Reposts' },
+  { key: 'liked',    label: 'Liked' },
+]
+
 export default function ProfilePage() {
   const { username }            = useParams()
   const navigate                = useNavigate()
@@ -19,15 +25,11 @@ export default function ProfilePage() {
   const {
     profileUser,
     posts,
-    likedPosts,
-    likedLoading,
-    loading,
-    error,
-    isOwnProfile,
-    isFollowing,
-    followLoading,
-    toggleFollow,
-    refreshProfile,
+    likedPosts,   likedLoading,
+    repostedPosts, repostLoading,
+    loading, error,
+    isOwnProfile, isFollowing, followLoading,
+    toggleFollow, refreshProfile,
   } = useProfile(username)
 
   if (error) {
@@ -45,8 +47,7 @@ export default function ProfilePage() {
             display: 'inline-flex', alignItems: 'center', gap: 6,
             padding: '10px 20px', background: '#F59E0B', border: 'none',
             borderRadius: 9999, color: '#0B0B0E',
-            fontFamily: 'var(--font-heading)', fontSize: 12, fontWeight: 700,
-            cursor: 'pointer',
+            fontFamily: 'var(--font-heading)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
           }}
         >
           <ArrowLeft size={14} /> Back home
@@ -54,6 +55,29 @@ export default function ProfilePage() {
       </div>
     )
   }
+
+  // Which posts to show depends on active tab
+  const tabPosts = activeTab === 'posts'
+    ? posts
+    : activeTab === 'reposts'
+      ? repostedPosts
+      : likedPosts
+
+  const tabLoading = activeTab === 'reposts'
+    ? repostLoading
+    : activeTab === 'liked'
+      ? likedLoading
+      : loading
+
+  const tabEmpty = activeTab === 'posts'
+    ? isOwnProfile
+      ? "You haven't posted anything yet. Start crafting!"
+      : `@${username} hasn't posted yet.`
+    : activeTab === 'reposts'
+      ? isOwnProfile
+        ? "You haven't reposted anything yet."
+        : `@${username} hasn't reposted anything yet.`
+      : 'No liked posts yet.'
 
   return (
     <div style={{ position: 'relative' }}>
@@ -88,7 +112,7 @@ export default function ProfilePage() {
           </motion.button>
         )}
 
-        {/* Skeleton */}
+        {/* Loading skeleton */}
         {loading && (
           <div style={{ marginBottom: 20 }}>
             <div className="skeleton" style={{ height: 180, borderRadius: 16, marginBottom: 0 }} />
@@ -115,32 +139,28 @@ export default function ProfilePage() {
           />
         )}
 
-        {/* Tabs — underline style, amber indicator */}
+        {/*
+          Tab switcher — Posts / Reposts / Liked
+          Underline amber indicator, matching profile Creator Gold palette
+        */}
         {!loading && (
           <div style={{
             display: 'flex',
-            gap: 0,
-            borderBottom: '1px solid rgba(245,158,11,0.15)',
+            borderBottom: '1px solid rgba(245,158,11,0.15)',   
             marginBottom: 20,
           }}>
-            {[
-              { key: 'posts', label: 'Posts' },
-              { key: 'liked', label: 'Liked' },
-            ].map(tab => (
+            {TABS.map(tab => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
                 style={{
                   padding: '10px 20px',
-                  background: 'none',
-                  border: 'none',
+                  background: 'none', border: 'none',
                   borderBottom: activeTab === tab.key
                     ? '2px solid #F59E0B'
                     : '2px solid transparent',
                   marginBottom: -1,
-                  color: activeTab === tab.key
-                    ? '#F59E0B'
-                    : 'var(--text-secondary)',    // secondary not muted — readable
+                  color: activeTab === tab.key ? '#F59E0B' : 'var(--text-secondary)',
                   fontFamily: 'var(--font-body)', fontSize: 14,
                   fontWeight: activeTab === tab.key ? 600 : 400,
                   cursor: 'pointer',
@@ -155,25 +175,23 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* Post grid — own posts */}
-        {!loading && activeTab === 'posts' && (
-          <PostGrid
-            posts={posts}
-            loading={loading}
-            emptyMessage={
-              isOwnProfile
-                ? "You haven't posted anything yet. Start crafting!"
-                : `@${username} hasn't posted yet.`
-            }
-          />
+        {/* Reposted-by header — shows above grid when on Reposts tab */}
+        {!loading && activeTab === 'reposts' && repostedPosts.length > 0 && (
+          <p style={{
+            fontFamily: 'var(--font-mono)', fontSize: 10,
+            color: 'var(--text-primary)', letterSpacing: '0.05em',
+            marginBottom: 12,
+          }}>
+            POSTS @{username} HAS REPOSTED
+          </p>
         )}
 
-        {/* Post grid — liked posts (all users, fetched separately) */}
-        {!loading && activeTab === 'liked' && (
+        {/* Post grid */}
+        {!loading && (
           <PostGrid
-            posts={likedPosts}
-            loading={likedLoading}
-            emptyMessage="No liked posts yet."
+            posts={tabPosts}
+            loading={tabLoading}
+            emptyMessage={tabEmpty}
           />
         )}
 

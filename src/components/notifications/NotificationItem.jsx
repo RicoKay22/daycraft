@@ -1,11 +1,12 @@
 import { useNavigate } from 'react-router-dom'
-import { Heart, MessageCircle, UserPlus } from 'lucide-react'
+import { Heart, MessageCircle, UserPlus, Repeat2 } from 'lucide-react'
 import { formatDistanceToNow } from '../utils/time'
 
 const TYPE_CONFIG = {
-  like:    { icon: Heart,          color: '#EF4444', label: 'liked your post' },
-  comment: { icon: MessageCircle,  color: '#22C55E', label: 'commented on your post' },
-  follow:  { icon: UserPlus,       color: '#F59E0B', label: 'started following you' },
+  like:    { icon: Heart,         color: '#EF4444', label: 'liked your post' },
+  comment: { icon: MessageCircle, color: '#22C55E', label: 'commented on your post' },
+  follow:  { icon: UserPlus,      color: '#F59E0B', label: 'started following you' },
+  repost:  { icon: Repeat2,       color: '#A3E635', label: 'reposted your post' },
 }
 
 export default function NotificationItem({ notification, onRead }) {
@@ -48,7 +49,7 @@ export default function NotificationItem({ notification, onRead }) {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
           {actor.avatar_url
-            ? <img src={actor.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ? <img src={actor.avatar_url} alt={actor.username || 'User'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             : <span style={{ fontFamily: 'var(--font-heading)', fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>{initials}</span>
           }
         </div>

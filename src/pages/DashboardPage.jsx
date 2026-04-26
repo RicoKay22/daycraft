@@ -20,8 +20,7 @@ function StatCard({ icon: Icon, label, value, sub, color, delay = 0 }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.3 }}
       style={{
-        background: 'var(--surface)',
-        border: '1px solid var(--border)',
+        background: 'var(--surface)', border: '1px solid var(--border)',
         borderRadius: 14, padding: '18px 20px',
         display: 'flex', flexDirection: 'column', gap: 10,
       }}
@@ -32,26 +31,18 @@ function StatCard({ icon: Icon, label, value, sub, color, delay = 0 }) {
         </span>
         <div style={{
           width: 32, height: 32, borderRadius: 9,
-          background: `${color}15`,
-          border: `1px solid ${color}25`,
+          background: `${color}15`, border: `1px solid ${color}25`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
           <Icon size={15} color={color} />
         </div>
       </div>
       <div>
-        <span style={{
-          fontFamily: 'var(--font-mono)', fontSize: 28,
-          fontWeight: 700, color,
-          display: 'block', lineHeight: 1,
-        }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 28, fontWeight: 700, color, display: 'block', lineHeight: 1 }}>
           {value ?? '—'}
         </span>
         {sub && (
-          <span style={{
-            fontFamily: 'var(--font-body)', fontSize: 11,
-            color: 'var(--text-muted)', marginTop: 4, display: 'block',
-          }}>
+          <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
             {sub}
           </span>
         )}
@@ -64,26 +55,15 @@ function StatCard({ icon: Icon, label, value, sub, color, delay = 0 }) {
 function TopPostRow({ post, rank }) {
   const text = post.content?.replace(/^\[.*?\]\s*/, '').trim() || ''
   const rankColors = ['#F59E0B', '#A3E635', '#22C55E']
-
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 12,
-      padding: '12px 14px',
-      background: 'var(--surface-raised)',
-      borderRadius: 10,
+      padding: '12px 14px', background: 'var(--surface-raised)', borderRadius: 10,
     }}>
-      <span style={{
-        fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700,
-        color: rankColors[rank] || 'var(--text-muted)',
-        minWidth: 20, textAlign: 'center',
-      }}>
+      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: rankColors[rank] || 'var(--text-muted)', minWidth: 20, textAlign: 'center' }}>
         #{rank + 1}
       </span>
-      <p style={{
-        fontFamily: 'var(--font-body)', fontSize: 13,
-        color: 'var(--text-secondary)', margin: 0, flex: 1,
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-      }}>
+      <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text-secondary)', margin: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {text || 'Post'}
       </p>
       <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
@@ -108,8 +88,7 @@ function CustomTooltip({ active, payload, label }) {
     <div style={{
       background: 'var(--surface)', border: '1px solid var(--border)',
       borderRadius: 8, padding: '8px 12px',
-      fontFamily: 'var(--font-body)', fontSize: 12,
-      color: 'var(--text-secondary)',
+      fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--text-secondary)',
       boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
     }}>
       <p style={{ margin: '0 0 4px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 10 }}>{label}</p>
@@ -141,7 +120,7 @@ export default function DashboardPage() {
     const days = period === '7d' ? 7 : 30
 
     try {
-      // Fetch all columns including impression_count and repost_count
+      // Select all engagement columns including repost_count and impression_count
       const { data: posts } = await supabase
         .from('posts')
         .select('id, content, like_count, comment_count, repost_count, impression_count, created_at')
@@ -156,12 +135,9 @@ export default function DashboardPage() {
       const totalImpressions = allPosts.reduce((s, p) => s + (p.impression_count || 0), 0)
 
       /*
-        REAL ENGAGEMENT RATE — industry standard formula used by Instagram,
-        Twitter Analytics and LinkedIn:
-          (likes + comments + reposts) / impressions × 100
-
-        Answers: "Of every 100 people who saw your posts, how many interacted?"
-        Shows '—' when impressions = 0 to avoid misleading numbers on new accounts.
+        REAL ENGAGEMENT RATE — industry standard:
+        (likes + comments + reposts) / impressions × 100
+        Shows '—' when impressions = 0 (new account, no tracked views yet)
       */
       const totalInteractions = totalLikes + totalComments + totalReposts
       const engagementRate = totalImpressions > 0
@@ -177,18 +153,14 @@ export default function DashboardPage() {
 
       setTopPosts(top3)
       setStats({
-        totalPosts:       allPosts.length,
-        totalLikes,
-        totalComments,
-        totalReposts,
-        totalImpressions,
-        totalInteractions,
-        followers:        profile?.follower_count  || 0,
-        following:        profile?.following_count || 0,
+        totalPosts: allPosts.length, totalLikes, totalComments,
+        totalReposts, totalImpressions, totalInteractions,
+        followers:  profile?.follower_count  || 0,
+        following:  profile?.following_count || 0,
         engagementRate,
       })
 
-      // Chart — posts + likes per day
+      // Activity chart — posts + likes + reposts per day
       const now = new Date()
       const chartDays = Array.from({ length: days }, (_, i) => {
         const d = new Date(now)
@@ -196,7 +168,7 @@ export default function DashboardPage() {
         return {
           date:    d.toLocaleDateString('en', { month: 'short', day: 'numeric' }),
           dateKey: d.toISOString().split('T')[0],
-          posts: 0, likes: 0,
+          posts: 0, likes: 0, reposts: 0,
         }
       })
 
@@ -204,8 +176,9 @@ export default function DashboardPage() {
         const key = post.created_at?.split('T')[0]
         const day = chartDays.find(d => d.dateKey === key)
         if (day) {
-          day.posts += 1
-          day.likes += post.like_count || 0
+          day.posts   += 1
+          day.likes   += post.like_count    || 0
+          day.reposts += post.repost_count  || 0
         }
       })
 
@@ -219,7 +192,6 @@ export default function DashboardPage() {
 
   const name = profile?.full_name || profile?.username || 'builder'
 
-  // Loading skeletons
   if (loading) {
     return (
       <div>
@@ -228,9 +200,7 @@ export default function DashboardPage() {
           <div className="skeleton" style={{ width: 140, height: 14, borderRadius: 4 }} />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 20 }}>
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="skeleton" style={{ height: 96, borderRadius: 14 }} />
-          ))}
+          {[...Array(4)].map((_, i) => <div key={i} className="skeleton" style={{ height: 96, borderRadius: 14 }} />)}
         </div>
         <div className="skeleton" style={{ height: 200, borderRadius: 14, marginBottom: 20 }} />
       </div>
@@ -241,55 +211,40 @@ export default function DashboardPage() {
     <div>
       {/* Header */}
       <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
+        initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
         style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}
       >
         <div>
-          <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 22, color: 'var(--text-primary)', margin: '0 0 4px' }}>
-            Dashboard
-          </h1>
-          <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--text-secondary)', margin: 0 }}>
+          <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 22, color: 'var(--text-primary)', margin: '0 0 4px' }}>Dashboard</h1>
+          <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
             Your craft by the numbers, {name}.
           </p>
         </div>
         <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10 }}>
           {[['7d', '7 days'], ['30d', '30 days']].map(([val, lbl]) => (
-            <button
-              key={val}
-              onClick={() => setPeriod(val)}
-              style={{
-                padding: '6px 12px',
-                background: period === val ? 'var(--primary)' : 'transparent',
-                color: period === val ? '#0B0B0E' : 'var(--text-secondary)',
-                border: 'none', borderRadius: 7, cursor: 'pointer',
-                fontFamily: 'var(--font-heading)', fontSize: 11, fontWeight: 700,
-                letterSpacing: '0.04em', transition: 'all 200ms',
-              }}
-            >
-              {lbl}
-            </button>
+            <button key={val} onClick={() => setPeriod(val)} style={{
+              padding: '6px 12px',
+              background: period === val ? 'var(--primary)' : 'transparent',
+              color: period === val ? '#0B0B0E' : 'var(--text-secondary)',
+              border: 'none', borderRadius: 7, cursor: 'pointer',
+              fontFamily: 'var(--font-heading)', fontSize: 11, fontWeight: 700,
+              letterSpacing: '0.04em', transition: 'all 200ms',
+            }}>{lbl}</button>
           ))}
         </div>
       </motion.div>
 
-      {/* Stat cards — 2×2 grid */}
+      {/* Stat cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 20 }}>
-        <StatCard icon={FileText} label="Total Posts"   value={stats?.totalPosts}       color="#F59E0B" sub="All time"              delay={0} />
-        <StatCard icon={Heart}    label="Likes"         value={stats?.totalLikes}       color="#EF4444" sub="All time"              delay={0.06} />
-        <StatCard icon={Eye}      label="Impressions"   value={stats?.totalImpressions} color="#22C55E" sub="Times posts were seen" delay={0.12} />
-        <StatCard icon={Users}    label="Followers"     value={stats?.followers}        color="#A3E635" sub={`Following ${stats?.following || 0}`} delay={0.18} />
+        <StatCard icon={FileText} label="Total Posts"   value={stats?.totalPosts}        color="#F59E0B" sub="All time"              delay={0} />
+        <StatCard icon={Heart}    label="Likes"         value={stats?.totalLikes}        color="#EF4444" sub="All time"              delay={0.06} />
+        <StatCard icon={Eye}      label="Impressions"   value={stats?.totalImpressions}  color="#22C55E" sub="Times posts were seen" delay={0.12} />
+        <StatCard icon={Users}    label="Followers"     value={stats?.followers}         color="#A3E635" sub={`Following ${stats?.following || 0}`} delay={0.18} />
       </div>
 
-      {/*
-        Engagement rate banner — real formula:
-        (likes + comments + reposts) / impressions × 100
-        Shows '—' until the user has real impression data.
-      */}
+      {/* Engagement rate */}
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.24 }}
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.24 }}
         style={{
           padding: '14px 20px',
           background: 'linear-gradient(135deg, rgba(245,158,11,0.1) 0%, rgba(34,197,94,0.08) 100%)',
@@ -300,21 +255,19 @@ export default function DashboardPage() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <Zap size={18} color="var(--primary)" />
-            <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text-secondary)' }}>
-              Engagement rate
-            </span>
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text-secondary)' }}>Engagement rate</span>
           </div>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color: 'var(--primary)' }}>
             {stats?.engagementRate}{stats?.engagementRate !== '—' ? '%' : ''}
           </span>
         </div>
-        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-secondary)', margin: 0, letterSpacing: '0.03em' }}>
+        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)', margin: 0, letterSpacing: '0.03em' }}>
           ({stats?.totalInteractions || 0} interactions ÷ {stats?.totalImpressions || 0} impressions) × 100
           &nbsp;·&nbsp; likes + comments + reposts
         </p>
       </motion.div>
 
-      {/* Interaction breakdown — likes / comments / reposts */}
+      {/* Interaction breakdown */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 20 }}>
         {[
           { icon: Heart,         label: 'Likes',    value: stats?.totalLikes,    color: '#EF4444' },
@@ -331,25 +284,21 @@ export default function DashboardPage() {
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700, color: item.color, display: 'block', lineHeight: 1 }}>
                 {item.value ?? 0}
               </span>
-              <span style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--text-muted)' }}>
-                {item.label}
-              </span>
+              <span style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: 'var(--text-muted)' }}>{item.label}</span>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Activity area chart */}
+      {/* Activity chart — posts + likes + reposts */}
       <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.28 }}
+        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}
         style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '20px 16px', marginBottom: 20 }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: 14, color: 'var(--text-primary)', margin: 0 }}>Activity</h3>
           <div style={{ display: 'flex', gap: 16 }}>
-            {[['Posts', '#F59E0B'], ['Likes', '#EF4444']].map(([lbl, col]) => (
+            {[['Posts', '#F59E0B'], ['Likes', '#EF4444'], ['Reposts', '#A3E635']].map(([lbl, col]) => (
               <span key={lbl} style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)' }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: col, display: 'inline-block' }} />
                 {lbl}
@@ -368,28 +317,29 @@ export default function DashboardPage() {
                 <stop offset="5%"  stopColor="#EF4444" stopOpacity={0.25} />
                 <stop offset="95%" stopColor="#EF4444" stopOpacity={0} />
               </linearGradient>
+              <linearGradient id="gReposts" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%"  stopColor="#A3E635" stopOpacity={0.2} />
+                <stop offset="95%" stopColor="#A3E635" stopOpacity={0} />
+              </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
             <XAxis dataKey="date" tick={{ fontFamily: 'var(--font-mono)', fontSize: 9, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} interval={period === '7d' ? 0 : 4} />
             <YAxis tick={{ fontFamily: 'var(--font-mono)', fontSize: 9, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} allowDecimals={false} />
             <Tooltip content={<CustomTooltip />} />
-            <Area type="monotone" dataKey="posts" name="Posts" stroke="#F59E0B" strokeWidth={2} fill="url(#gPosts)" dot={false} />
-            <Area type="monotone" dataKey="likes" name="Likes" stroke="#EF4444" strokeWidth={2} fill="url(#gLikes)" dot={false} />
+            <Area type="monotone" dataKey="posts"   name="Posts"   stroke="#F59E0B" strokeWidth={2} fill="url(#gPosts)"   dot={false} />
+            <Area type="monotone" dataKey="likes"   name="Likes"   stroke="#EF4444" strokeWidth={2} fill="url(#gLikes)"   dot={false} />
+            <Area type="monotone" dataKey="reposts" name="Reposts" stroke="#A3E635" strokeWidth={2} fill="url(#gReposts)" dot={false} />
           </AreaChart>
         </ResponsiveContainer>
       </motion.div>
 
-      {/* Posts over time bar chart — RoundedBar fixes mobile WebKit border-radius errors */}
+      {/* Posts over time bar chart */}
       {chartData.some(d => d.posts > 0) && (
         <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.34 }}
+          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.34 }}
           style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '20px 16px', marginBottom: 20 }}
         >
-          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: 14, color: 'var(--text-primary)', margin: '0 0 16px' }}>
-            Posts over time
-          </h3>
+          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: 14, color: 'var(--text-primary)', margin: '0 0 16px' }}>Posts over time</h3>
           <ResponsiveContainer width="100%" height={140}>
             <BarChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
@@ -405,36 +355,24 @@ export default function DashboardPage() {
       {/* Top 3 posts */}
       {topPosts.length > 0 && (
         <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.38 }}
+          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.38 }}
           style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '20px' }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
             <TrendingUp size={16} color="var(--primary)" />
-            <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: 14, color: 'var(--text-primary)', margin: 0 }}>
-              Top performing posts
-            </h3>
+            <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: 14, color: 'var(--text-primary)', margin: 0 }}>Top performing posts</h3>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {topPosts.map((post, i) => (
-              <TopPostRow key={post.id} post={post} rank={i} />
-            ))}
+            {topPosts.map((post, i) => <TopPostRow key={post.id} post={post} rank={i} />)}
           </div>
         </motion.div>
       )}
 
       {/* Empty state */}
       {stats?.totalPosts === 0 && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          style={{ textAlign: 'center', padding: '48px 24px' }}
-        >
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ textAlign: 'center', padding: '48px 24px' }}>
           <TrendingUp size={40} color="var(--text-muted)" style={{ marginBottom: 16 }} />
-          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: 18, color: 'var(--text-primary)', margin: '0 0 8px' }}>
-            Nothing to show yet
-          </h3>
+          <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: 18, color: 'var(--text-primary)', margin: '0 0 8px' }}>Nothing to show yet</h3>
           <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.6, maxWidth: 280, margin: '0 auto' }}>
             Start posting to see your engagement stats, activity charts, and top content here.
           </p>
