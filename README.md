@@ -2,7 +2,7 @@
 
 > **Craft something every day. Share what you're building.**
 
-A premium social media platform for builders — developers, designers, and creators who document their progress daily. Built as the Web3Bridge Cohort XIV Frontend JavaScript Advanced assignment.
+A premium social media platform for builders, developers, designers, and creators who document their progress daily. Built as the Web3Bridge Cohort XIV Frontend JavaScript Advanced assignment.
 
 🔗 **Live:** [daycraft-omega.vercel.app](https://daycraft-omega.vercel.app)
 
@@ -176,10 +176,11 @@ src/
 
 ## Developer
 
-**Rico Kay** (Olumide Olayinka)
-Web3Bridge Cohort XIV — Frontend JavaScript Advanced
+**Olumide Olayinka** (Rico Kay)
+
 
 - GitHub: [@RicoKay22](https://github.com/RicoKay22)
+- Contact Card: [Olumude Olayinka] (https://digital-business-card-beta-opal.vercel.app/)
 - Brand: Rico Kay · *Where Design Meets Logic*
 
 ---
