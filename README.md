@@ -12,7 +12,7 @@ A premium social media platform for builders — developers, designers, and crea
 
 | Feed | Profile | Dashboard |
 |------|---------|-----------|
-| ![Feed](./public/og-image.png) | ![Profile](./public/og-image.png) | ![Dashboard](./public/og-image.png) |
+| ![Feed](./public/FeedPage.png) | ![Profile](./public/ProfilePage.png) | ![Dashboard](./public/Dashboard.png) |
 
 ---
 
