@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft } from 'lucide-react'
-import { useSelector, useDispatch } from 'react-redux'
-import { selectPostById, fetchFeedPosts } from '../store/postsSlice'
-import { selectFollowingIds } from '../store/usersSlice'
+import { useSelector } from 'react-redux'
+import { selectPostById } from '../store/postsSlice'
 import { useAuth } from '../context/AuthContext'
 import { useLike } from '../hooks/useLike'
 import { supabase } from '../lib/supabase'
@@ -12,35 +11,57 @@ import PostCard from '../components/feed/PostCard'
 import { formatDistanceToNow } from '../components/utils/time'
 
 export default function PostDetailPage() {
-  const { postId }   = useParams()
-  const navigate     = useNavigate()
-  const dispatch     = useDispatch()
-  const { user }     = useAuth()
+  const { postId }     = useParams()
+  const navigate       = useNavigate()
+  const { user }       = useAuth()
   const { toggleLike } = useLike()
 
-  const post = useSelector(state => selectPostById(state, postId))
-  const [loading, setLoading]   = useState(!post)
-  const [comments, setComments] = useState([])
-  const [newComment, setNewComment] = useState('')
-  const [submitting, setSubmitting] = useState(false)
+  // Try Redux store first (fast path — already in feed)
+  const postFromStore = useSelector(state => selectPostById(state, postId))
 
-  // Fetch post if not in store
+  // Local fallback — used when opening a shared link cold (Redux store is empty)
+  const [fetchedPost, setFetchedPost] = useState(null)
+  const [loading,     setLoading]     = useState(!postFromStore)
+  const [notFound,    setNotFound]    = useState(false)
+  const [comments,    setComments]    = useState([])
+  const [newComment,  setNewComment]  = useState('')
+  const [submitting,  setSubmitting]  = useState(false)
+
+  // The post to render — Redux takes priority, local fallback otherwise
+  const post = postFromStore || fetchedPost
+
+  // Fetch post directly from Supabase when Redux store doesn't have it.
+  // This is the cold-load path: user opened a shared link without going
+  // through the feed first, so Redux is empty. Previously this dispatched
+  // { type: 'posts/upsertOne' } which doesn't exist in postsSlice, so
+  // the post was fetched but never stored, and "Post not found" rendered.
   useEffect(() => {
-    if (post) { setLoading(false); return }
+    if (postFromStore) {
+      setLoading(false)
+      return
+    }
+
+    setLoading(true)
+    setNotFound(false)
 
     supabase
       .from('posts')
       .select('*, author:profiles!posts_user_id_fkey(id, username, full_name, avatar_url)')
       .eq('id', postId)
       .single()
-      .then(({ data }) => {
-        if (data) dispatch({ type: 'posts/upsertOne', payload: data })
+      .then(({ data, error }) => {
+        if (error || !data) {
+          setNotFound(true)
+        } else {
+          setFetchedPost(data)
+        }
         setLoading(false)
       })
-  }, [postId]) // eslint-disable-line
+  }, [postId, postFromStore]) // eslint-disable-line
 
   // Fetch comments
   useEffect(() => {
+    if (!postId) return
     supabase
       .from('comments')
       .select('*, author:profiles!comments_user_id_fkey(id, username, full_name, avatar_url)')
@@ -55,12 +76,12 @@ export default function PostDetailPage() {
     setSubmitting(true)
 
     const optimistic = {
-      id: `temp-${Date.now()}`,
-      user_id: user.id,
-      post_id: postId,
-      content: newComment.trim(),
+      id:         `temp-${Date.now()}`,
+      user_id:    user.id,
+      post_id:    postId,
+      content:    newComment.trim(),
       created_at: new Date().toISOString(),
-      author: { username: 'you', full_name: '', avatar_url: '' },
+      author:     { username: 'you', full_name: '', avatar_url: '' },
     }
 
     setComments(prev => [...prev, optimistic])
@@ -74,10 +95,8 @@ export default function PostDetailPage() {
         .single()
 
       if (error) throw error
-      // Replace optimistic with real
       setComments(prev => prev.map(c => c.id === optimistic.id ? data : c))
     } catch (err) {
-      // Revert
       setComments(prev => prev.filter(c => c.id !== optimistic.id))
       setNewComment(optimistic.content)
       console.error('Comment failed:', err.message)
@@ -86,6 +105,7 @@ export default function PostDetailPage() {
     }
   }
 
+  // ── Loading ──────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div style={{ padding: '8px 0' }}>
@@ -104,23 +124,43 @@ export default function PostDetailPage() {
     )
   }
 
-  if (!post) {
+  // ── Not found ────────────────────────────────────────────────────────────
+  if (notFound || !post) {
     return (
       <div style={{ textAlign: 'center', padding: '64px 24px' }}>
-        <p style={{ fontFamily: 'var(--font-heading)', fontSize: 18, color: 'var(--text-primary)', marginBottom: 16 }}>Post not found.</p>
-        <button onClick={() => navigate(-1)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 20px', background: 'var(--primary)', border: 'none', borderRadius: 9999, color: '#0B0B0E', fontFamily: 'var(--font-heading)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-          <ArrowLeft size={14} /> Go back
+        <p style={{ fontFamily: 'var(--font-heading)', fontSize: 18, color: 'var(--text-primary)', marginBottom: 8 }}>
+          Post not found.
+        </p>
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--text-muted)', marginBottom: 24 }}>
+          This post may have been deleted or the link is invalid.
+        </p>
+        <button
+          onClick={() => navigate('/')}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '10px 20px', background: 'var(--primary)',
+            border: 'none', borderRadius: 9999, color: '#0B0B0E',
+            fontFamily: 'var(--font-heading)', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+          }}
+        >
+          <ArrowLeft size={14} /> Go home
         </button>
       </div>
     )
   }
 
+  // ── Post detail ──────────────────────────────────────────────────────────
   return (
     <div>
       {/* Back */}
       <button
         onClick={() => navigate(-1)}
-        style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', fontSize: 13, padding: '0 0 16px', transition: 'color 150ms' }}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          background: 'none', border: 'none', cursor: 'pointer',
+          color: 'var(--text-muted)', fontFamily: 'var(--font-body)',
+          fontSize: 13, padding: '0 0 16px', transition: 'color 150ms',
+        }}
         onMouseEnter={e => e.currentTarget.style.color = 'var(--primary)'}
         onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
       >
@@ -132,37 +172,56 @@ export default function PostDetailPage() {
 
       {/* Comments section */}
       <div style={{ marginTop: 16 }}>
-        <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 12px', letterSpacing: '0.04em' }}>
+        <h3 style={{
+          fontFamily: 'var(--font-heading)', fontSize: 14,
+          color: 'var(--text-secondary)', margin: '0 0 12px',
+          letterSpacing: '0.04em',
+        }}>
           COMMENTS · {comments.length}
         </h3>
 
-        {/* Comment list */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
           {comments.length === 0 && (
-            <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: '24px 0' }}>
+            <p style={{
+              fontFamily: 'var(--font-body)', fontSize: 13,
+              color: 'var(--text-muted)', textAlign: 'center', padding: '24px 0',
+            }}>
               No comments yet. Be the first.
             </p>
           )}
           {comments.map(comment => {
-            const a = comment.author || {}
+            const a        = comment.author || {}
             const initials = (a.username || 'U').slice(0, 2).toUpperCase()
             return (
               <motion.div
                 key={comment.id}
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
-                style={{ display: 'flex', gap: 10, padding: '12px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10 }}
+                style={{
+                  display: 'flex', gap: 10, padding: '12px 14px',
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)', borderRadius: 10,
+                }}
               >
-                <div style={{ width: 30, height: 30, borderRadius: 8, background: a.avatar_url ? 'transparent' : 'var(--surface-raised)', border: '1px solid var(--border)', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{
+                  width: 30, height: 30, borderRadius: 8,
+                  background: a.avatar_url ? 'transparent' : 'var(--surface-raised)',
+                  border: '1px solid var(--border)', overflow: 'hidden',
+                  flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
                   {a.avatar_url
-                    ? <img src={a.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ? <img src={a.avatar_url} alt={`${a.username || 'User'} avatar`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     : <span style={{ fontFamily: 'var(--font-heading)', fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)' }}>{initials}</span>
                   }
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                    <span style={{ fontFamily: 'var(--font-heading)', fontSize: 12, color: 'var(--text-primary)' }}>@{a.username || 'user'}</span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>{formatDistanceToNow(comment.created_at)}</span>
+                    <span style={{ fontFamily: 'var(--font-heading)', fontSize: 12, color: 'var(--text-primary)' }}>
+                      @{a.username || 'user'}
+                    </span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>
+                      {formatDistanceToNow(comment.created_at)}
+                    </span>
                   </div>
                   <p style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.55 }}>
                     {comment.content}
